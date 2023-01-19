@@ -11,7 +11,10 @@ env:
 
 jobs:
   build:
-
+    defaults:
+      run:
+        working-directory: ./firmware/obc/cubesat-1-fw-obc
+        
     runs-on: ubuntu-latest
 
     steps:
