@@ -12,11 +12,7 @@ fn main() {
         |___________|/  
     "};
 
-    println!(
-        "{}\n{}",
-        "Hello world!",
-        "I dream to be an OBC firmware for the CubeSat-1 project when I will grow up (^_^)"
-    );
+    println!("Hello world!\nI dream to be an OBC firmware for the CubeSat-1 project when I will grow up (^_^)");
 
     println!("{}", cubesat);
 }
