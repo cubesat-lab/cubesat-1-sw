@@ -1,0 +1,3 @@
+x (A) Create @adcs folder
+x (B) Create todo.txt file
+(C) Add cargo project to @adcs folder
