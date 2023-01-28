@@ -1,0 +1,3 @@
+{
+    "rust-analyzer.linkedProjects": ["${workspaceFolder}/firmware/obc/cubesat-1-fw-obc/Cargo.toml"],
+}
