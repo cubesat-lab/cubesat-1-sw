@@ -6,28 +6,48 @@ The firmware for each CubeSat's subsystem is written in [Rust](https://www.rust-
 
 ## Setup
 
-### Prerequisites
+The steps below are heavily inspired from [The Embedded Rust Book](https://docs.rust-embedded.org/book/intro/install.html)
 
-- Installed [Rust](https://www.rust-lang.org/learn/get-started)
+
+- Windows
+    - Install [VSCode](https://code.visualstudio.com/) (optionally)
+    - Install [Rust](https://www.rust-lang.org/learn/get-started)
+    - Install [MSYS2](https://www.msys2.org/)
+    - Cortex-M7F with hardware floating point (ARMv7E-M architecture):
+        ```bash
+        rustup target add thumbv7em-none-eabihf
+        ```
+    - cargo-binutils
+        ```bash
+        cargo install cargo-binutils
+        rustup component add llvm-tools-preview
+        ```
+    - cargo-generate
+        ```bash
+        cargo install cargo-generate
+        ```
+    - arm-none-eabi-gdb
+        ```bash
+        pacman -S gcc
+        pacman -S mingw-w64-x86_64-gdb
+        pacman -S mingw-w64-x86_64-arm-none-eabi-gdb
+        ```
+        or download [here](https://developer.arm.com/downloads/-/gnu-rm) and install it
+    - OpenOCD
+        ```bash
+        pacman -S mingw-w64-x86_64-openocd
+        ```
+- Linux
+
+    - todo
+
+- macOS
+
+    - todo
+
+### Hardware
+
 - STM32F767ZI Board ([NUCLEO-F767ZI](https://www.st.com/en/evaluation-tools/nucleo-f767zi.html))
-- VSCode (optionally)
-
-### Compiling
-
-- Compile OBC Firmware
-
-    ```bash
-    cd ./firmware/obc/cubesat-1-fw-obc/
-    cargo build
-    ```
-
-### Board Connection
-
-- todo
-
-### Firmware Flashing
-
-- todo
 
 ## Usage
 
