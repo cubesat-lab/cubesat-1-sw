@@ -7,25 +7,24 @@
             "label": "Cargo",
             "type": "shell",
             "options": {
-                "cwd": "${workspaceFolder}/firmware/${input:selectFwDir}"
+                "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}"
             },
             "command": "cargo ${input:selectCargoCmd}",
             "problemMatcher": [
                 "$rustc"
             ]
-        },
-        
+        }
     ],
     "inputs": [
         {
-            "id": "selectFwDir",
+            "id": "fw",
             "type": "pickString",
-            "description": "Which project?",
+            "description": "Which Firmware?",
             "options": [
-                {"label": "ADCS", "value": "adcs/cubesat-1-fw-adcs"},
-                {"label": "COM", "value": "com/cubesat-1-fw-com"},
-                {"label": "EPS", "value": "eps/cubesat-1-fw-eps"},
-                {"label": "OBC", "value": "obc/cubesat-1-fw-obc"},
+                {"label": "ADCS", "value": "adcs"},
+                {"label": "COM", "value": "com"},
+                {"label": "EPS", "value": "eps"},
+                {"label": "OBC", "value": "obc"},
             ]
         },
         {
