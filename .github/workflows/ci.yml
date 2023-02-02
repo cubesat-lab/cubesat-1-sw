@@ -8,11 +8,17 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  FW_PATH: firmware/obc/cubesat-1-fw-obc
 
 jobs:
   ci-linux:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        firmware:
+          # - adcs
+          # - com
+          # - eps
+          - obc
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
@@ -23,14 +29,10 @@ jobs:
         override: true
     - uses: actions-rs/cargo@v1
       with:
-        command: check
-        args: --manifest-path ${{ github.workspace }}/${{ env.FW_PATH }}/Cargo.toml --verbose
-    - uses: actions-rs/cargo@v1
-      with:
         command: build
-        args: --manifest-path ${{ github.workspace }}/${{ env.FW_PATH }}/Cargo.toml --verbose
-    - uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --manifest-path ${{ github.workspace }}/${{ env.FW_PATH }}/Cargo.toml --verbose
+        args: --manifest-path ${{ github.workspace }}/firmware/${{ matrix.firmware }}/cubesat-1-fw-${{ matrix.firmware }}/Cargo.toml --target thumbv7em-none-eabihf --verbose
+    # - uses: actions-rs/cargo@v1
+    #   with:
+    #     command: test
+    #     args: --manifest-path ${{ github.workspace }}/firmware/${{ matrix.firmware }}/cubesat-1-fw-${{ matrix.firmware }}/Cargo.toml --target x86_64-unknown-linux-gnu --verbose
 
