@@ -8,13 +8,14 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  FW_PATH: ./firmware/obc/cubesat-1-fw-obc
 
 jobs:
   ci-linux:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./firmware/obc/cubesat-1-fw-obc
+        working-directory: $FW_PATH
 
     steps:
     - uses: actions/checkout@v3
@@ -27,13 +28,13 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: check
-        args: --verbose
+        args: --manifest-path $FW_PATH/Cargo.toml --verbose
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --verbose
+        args: --manifest-path $FW_PATH/Cargo.toml --verbose
     - uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --verbose
+        args: --manifest-path $FW_PATH/Cargo.toml --verbose
 
