@@ -10,12 +10,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  ci-linux:
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./firmware/obc/cubesat-1-fw-obc
-        
-    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -26,15 +25,15 @@ jobs:
         target: thumbv7em-none-eabihf
         override: true
     - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --verbose
+      with:
+        command: check
+        args: --verbose
     - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --verbose
+      with:
+        command: build
+        args: --verbose
     - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --verbose
+      with:
+        command: test
+        args: --verbose
 
