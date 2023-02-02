@@ -8,15 +8,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  FW_PATH: ./firmware/obc/cubesat-1-fw-obc
+  FW_PATH: firmware/obc/cubesat-1-fw-obc
 
 jobs:
   ci-linux:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: $FW_PATH
-
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
@@ -25,20 +21,16 @@ jobs:
         toolchain: stable
         target: thumbv7em-none-eabihf
         override: true
-    - name: cmd test 1
-      run: echo --manifest-path $FW_PATH/Cargo.toml --verbose
-    - name: cmd test 2
-      run: echo ${{ env.FW_PATH }}/Cargo.toml
     - uses: actions-rs/cargo@v1
       with:
         command: check
-        args: --manifest-path $FW_PATH/Cargo.toml --verbose
+        args: --manifest-path ${{ github.workspace }}/${{ env.FW_PATH }}/Cargo.toml --verbose
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --manifest-path $FW_PATH/Cargo.toml --verbose
+        args: --manifest-path ${{ github.workspace }}/${{ env.FW_PATH }}/Cargo.toml --verbose
     - uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --manifest-path $FW_PATH/Cargo.toml --verbose
+        args: --manifest-path ${{ github.workspace }}/${{ env.FW_PATH }}/Cargo.toml --verbose
 
