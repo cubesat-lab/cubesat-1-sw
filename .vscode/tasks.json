@@ -1,0 +1,85 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Cargo",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}"
+            },
+            "command": "cargo ${input:selectCargoCmd}",
+            "problemMatcher": [
+                "$rustc"
+            ]
+        }
+    ],
+    "inputs": [
+        {
+            "id": "fw",
+            "type": "pickString",
+            "description": "Which Firmware?",
+            "options": [
+                {"label": "ADCS", "value": "adcs"},
+                {"label": "COM", "value": "com"},
+                {"label": "EPS", "value": "eps"},
+                {"label": "OBC", "value": "obc"},
+            ]
+        },
+        {
+            "id": "selectCargoCmd",
+            "type": "pickString",
+            "description": "Which cargo command?",
+            "options": [
+                "add",
+                "b",
+                "bench",
+                "build",
+                "c",
+                "check",
+                "clean",
+                "clippy",
+                "config",
+                "d",
+                "doc",
+                "fetch",
+                "fix",
+                "fmt",
+                "generate-lockfile",
+                "git-checkout",
+                "help",
+                "init",
+                "install",
+                "locate-project",
+                "login",
+                "logout",
+                "metadata",
+                "miri",
+                "new",
+                "owner",
+                "package",
+                "pkgid",
+                "publish",
+                "r",
+                "read-manifest",
+                "remove",
+                "report",
+                "rm",
+                "run",
+                "rustc",
+                "rustdoc",
+                "search",
+                "t",
+                "test",
+                "tree",
+                "uninstall",
+                "update",
+                "vendor",
+                "verify-project",
+                "version",
+                "yank",
+            ],
+        },
+    ]
+}
