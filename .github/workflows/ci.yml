@@ -25,6 +25,10 @@ jobs:
         toolchain: stable
         target: thumbv7em-none-eabihf
         override: true
+    - name: cmd test 1
+      run: echo --manifest-path $FW_PATH/Cargo.toml --verbose
+    - name: cmd test 2
+      run: echo ${{ env.FW_PATH }}/Cargo.toml
     - uses: actions-rs/cargo@v1
       with:
         command: check
