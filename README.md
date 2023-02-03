@@ -42,8 +42,45 @@ The steps below are heavily inspired from [The Embedded Rust Book](https://docs.
     - todo
 
 - macOS
-
-    - todo
+    - Install [VSCode](https://code.visualstudio.com/) (optionally)
+    - Update Homebrew
+        ```bash
+        brew update
+        brew upgrade
+        ```
+    - Install Rust
+        ```bash
+        brew install rust
+        ```
+    - Cortex-M7F with hardware floating point (ARMv7E-M architecture):
+        ```bash
+        rustup target add thumbv7em-none-eabihf
+        ```
+    - cargo-binutils
+        ```bash
+        cargo install cargo-binutils
+        rustup component add llvm-tools-preview
+        ```
+    - cargo-generate
+        ```bash
+        cargo install cargo-generate
+        ```
+    - cargo-flash
+        ```bash
+        cargo install cargo-flash
+        ```
+    - gcc-arm-embedded
+        ```bash
+        brew install --cask gcc-arm-embedded 
+        ```
+    - arm-none-eabi-gdb
+        ```bash
+        brew install --cask arm-none-eabi-gdb
+        ```
+    - OpenOCD
+        ```bash
+        brew install open-ocd
+        ```
 
 ### Hardware
 
