@@ -1,9 +1,19 @@
 [package]
+authors = ["Andrei Basarab <andy.basarab@gmail.com>"]
 name = "cubesat-1-fw-obc"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/cubesat-lab/cubesat-1-sw/"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-indoc = "1.0"
+panic-halt = "0.2.0"
+cortex-m-rt = "0.7.2"
+# cortex-m = "0.7.7"
+# cortex-m-semihosting = "0.3.3"
+
+[dependencies.stm32f7xx-hal]
+version = "0.7.0"
+features = ["stm32f767", "rt"]

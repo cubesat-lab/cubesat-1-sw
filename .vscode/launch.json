@@ -1,0 +1,54 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}",
+            "externalConsole": false,
+            "filterStderr": true,
+            "filterStdout": false,
+            "logging": {
+                "moduleLoad": true,
+                "trace": true,
+                "engineLogging": true,
+                "programOutput": true,
+                "exceptions": false
+            },
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "debugServerPath": "openocd",
+            "debugServerArgs": "-f ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/openocd.cfg",
+            "targetArchitecture": "arm",
+            "program": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/target/thumbv7em-none-eabihf/debug/cubesat-1-fw-${input:fw}",
+            "stopAtEntry": true,
+            "setupCommands": [
+                { "text": "-environment-cd ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}" },
+                { "text": "-target-select remote localhost:3333", "description": "connect to target"},
+                { "text": "-file-exec-and-symbols target/thumbv7em-none-eabihf/debug/cubesat-1-fw-${input:fw}", "description": "load file"},
+                { "text": "-interpreter-exec console \"set print asm-demangle on\""},
+                { "text": "-interpreter-exec console \"monitor reset\""},
+                { "text": "-interpreter-exec console \"monitor halt\""},
+                { "text": "-interpreter-exec console \"monitor arm semihosting enable\""},
+                { "text": "-target-download", "description": "flash target"}
+            ],
+        }
+    ],
+    "inputs": [
+        {
+            "id": "fw",
+            "type": "pickString",
+            "description": "Which Firmware?",
+            "options": [
+                {"label": "ADCS", "value": "adcs"},
+                {"label": "COM", "value": "com"},
+                {"label": "EPS", "value": "eps"},
+                {"label": "OBC", "value": "obc"},
+            ]
+        },
+    ]
+}
