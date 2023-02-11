@@ -11,8 +11,8 @@ publish = false
 [dependencies]
 panic-halt = "0.2.0"
 cortex-m-rt = "0.7.2"
-# cortex-m = "0.7.7"
-# cortex-m-semihosting = "0.3.3"
+cortex-m = "0.7.7"
+cortex-m-semihosting = "0.5.0"
 
 [dependencies.stm32f7xx-hal]
 version = "0.7.0"
