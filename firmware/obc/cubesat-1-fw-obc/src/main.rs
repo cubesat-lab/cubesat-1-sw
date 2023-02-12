@@ -8,11 +8,12 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 
 static USE_BOARD_DEMO: bool = true;
+static USE_GDB: bool = false;
 
 #[entry]
 fn main() -> ! {
     // Initialization part
-    let mut board = BoardDemo::init();
+    let mut board = BoardDemo::init(USE_GDB);
 
     // User Code
 
