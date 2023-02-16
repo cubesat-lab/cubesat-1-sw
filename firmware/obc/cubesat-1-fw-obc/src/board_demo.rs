@@ -7,6 +7,7 @@ use cortex_m::{
     interrupt::{free, Mutex},
     peripheral::NVIC,
 };
+use cortex_m_rt::exception;
 use cortex_m_semihosting::hprintln;
 use embedded_hal::adc::{Channel as AdcChannel, OneShot};
 use fugit::HertzU32 as Hertz;
@@ -18,7 +19,7 @@ use stm32f7xx_hal::{
     prelude::*,
     serial::{self, Serial},
     signature::{Uid, VtempCal110, VtempCal30},
-    timer::{Ch, Channel, PwmHz, SysDelay},
+    timer::{Ch, Channel, PwmHz, SysCounter, SysEvent},
 };
 
 // Semaphore for synchronization
@@ -27,9 +28,12 @@ static SEMAPHORE: Mutex<Cell<bool>> = Mutex::new(Cell::new(true));
 // GPIO pin that main thread and interrupt handler must share
 static BUTTON_PIN: Mutex<RefCell<Option<PC13<Input<Floating>>>>> = Mutex::new(RefCell::new(None));
 
+// Globally available SysTick variable
+static SYSTICK_US: Mutex<Cell<u64>> = Mutex::new(Cell::new(0));
+
 static TAB: &str = "    ";
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Copy, PartialEq)]
 enum BoardDemoMode {
     GreenLedPulse,
     BlueLedBlink,
@@ -72,9 +76,46 @@ impl Clone for BoardDemoMcuUid {
     }
 }
 
-struct BoardDemoPins {
+#[allow(dead_code)]
+struct BoardDemoGpio {
     led_blue: Pin<'B', 7, Output>,
     led_red: Pin<'B', 14, Output>,
+}
+
+struct TimerUs {
+    init: u64,
+    period: u64,
+}
+
+impl Default for TimerUs {
+    fn default() -> Self {
+        TimerUs { init: 0, period: 0 }
+    }
+}
+
+impl TimerUs {
+    fn init(&mut self, time: u64, period: u64) {
+        self.init = time;
+        self.period = period;
+    }
+
+    fn check_expired(&mut self, time: u64) -> bool {
+        if (self.init + self.period) >= time {
+            return false;
+        } else {
+            return true;
+        }
+    }
+}
+
+struct BoardDemoLedAttr<T> {
+    pin: T,
+    timer: TimerUs,
+}
+
+struct BoardDemoLed {
+    blue: BoardDemoLedAttr<Pin<'B', 7, Output>>,
+    red: BoardDemoLedAttr<Pin<'B', 14, Output>>,
 }
 
 struct BoardDemoPwmAttr<T> {
@@ -107,6 +148,7 @@ struct BoardDemoAdc {
 struct BoardDemoTemperatureSensor {
     cal30: u16,
     cal110: u16,
+    timer: TimerUs,
 }
 
 #[allow(dead_code)]
@@ -129,12 +171,12 @@ pub struct BoardDemo {
     mode: BoardDemoMode,
     mcu_uid: BoardDemoMcuUid,
     counter: u32,
-    pin: BoardDemoPins,
+    led: BoardDemoLed,
     pwm: BoardDemoPwm,
     adc: BoardDemoAdc,
     temp_sensor: BoardDemoTemperatureSensor,
     serial: BoardDemoSerial,
-    sys_delay: SysDelay,
+    sys_counter: SysCounter<1000000>,
     gdb: bool,
 }
 
@@ -146,7 +188,6 @@ impl BoardDemo {
         let mut exti = pac_obj.EXTI;
 
         // Set up the system clock. We want to run at 216MHz for this one.
-        let cortex_obj = cortex_m::peripheral::Peripherals::take().unwrap();
         let mut rcc = pac_obj.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
         let usart = pac_obj.USART3;
@@ -173,8 +214,17 @@ impl BoardDemo {
         let pin_uart_tx = gpiod.pd8.into_alternate();
         let pin_uart_rx = gpiod.pd9.into_alternate();
 
-        // Create a delay abstraction based on SysTick
-        let sys_delay_obj = cortex_obj.SYST.delay(&clocks);
+        // Create a timer based on SysTick
+        let mut sys_counter_obj = cortex_m::peripheral::Peripherals::take()
+            .unwrap()
+            .SYST
+            .counter_us(&clocks);
+
+        // Register to SysTick exception
+        sys_counter_obj.listen(SysEvent::Update);
+
+        // Set timer to 1 ms
+        sys_counter_obj.start(1.millis()).unwrap();
 
         // Init UART3 - Default to 115_200 bauds
         let serial = Serial::new(
@@ -227,9 +277,15 @@ impl BoardDemo {
                 lot_num,
             },
             counter: 0,
-            pin: BoardDemoPins {
-                led_blue: pin_led_blue,
-                led_red: pin_led_red,
+            led: BoardDemoLed {
+                blue: BoardDemoLedAttr {
+                    pin: pin_led_blue,
+                    timer: TimerUs::default(),
+                },
+                red: BoardDemoLedAttr {
+                    pin: pin_led_red,
+                    timer: TimerUs::default(),
+                },
             },
             pwm: BoardDemoPwm {
                 led_green: BoardDemoPwmAttr {
@@ -247,12 +303,13 @@ impl BoardDemo {
             temp_sensor: BoardDemoTemperatureSensor {
                 cal30: VtempCal30::get().read(),
                 cal110: VtempCal110::get().read(),
+                timer: TimerUs::default(),
             },
             serial: BoardDemoSerial {
                 tx: serial_tx,
                 rx: serial_rx,
             },
-            sys_delay: sys_delay_obj,
+            sys_counter: sys_counter_obj,
             gdb,
         }
     }
@@ -326,6 +383,12 @@ impl BoardDemo {
         self.delay(1);
     }
 
+    fn stop_pwm_led_green(&mut self) {
+        self.pwm.led_green.last_duty = 0;
+        self.pwm.led_green.current_duty = 0;
+        self.pwm.led_green.pin.set_duty(Channel::C3, 0);
+    }
+
     fn report_mode(&mut self) {
         let mode = self.mode;
         self.formatln(format_args!("Mode: [{:?}]", mode));
@@ -333,6 +396,23 @@ impl BoardDemo {
 
     fn on_button_action(&mut self) {
         self.mode.change();
+
+        // Perform necessary steps before transition into a new state
+        // Start timers, turn off LEDs, etc.
+        if self.mode == BoardDemoMode::BlueLedBlink {
+            self.stop_pwm_led_green();
+
+            let time = self.get_systick_us();
+            self.led.blue.timer.init(time, 500_000);
+        } else if self.mode == BoardDemoMode::RedLedBlink {
+            self.led.blue.pin.set_low();
+
+            let time = self.get_systick_us();
+            self.led.red.timer.init(time, 100_000);
+        } else if self.mode == BoardDemoMode::DataReport {
+            self.led.red.pin.set_low();
+        }
+
         self.report_mode();
     }
 
@@ -352,16 +432,20 @@ impl BoardDemo {
                 self.play_pwm_led_green();
             }
             BoardDemoMode::BlueLedBlink => {
-                self.pin.led_blue.set_high();
-                self.delay(500_000);
-                self.pin.led_blue.set_low();
-                self.delay(500_000);
+                let time = self.get_systick_us();
+
+                if self.led.blue.timer.check_expired(time) {
+                    self.led.blue.pin.toggle();
+                    self.led.blue.timer.init(time, 500_000)
+                }
             }
             BoardDemoMode::RedLedBlink => {
-                self.pin.led_red.set_high();
-                self.delay(100_000);
-                self.pin.led_red.set_low();
-                self.delay(100_000);
+                let time = self.get_systick_us();
+
+                if self.led.red.timer.check_expired(time) {
+                    self.led.red.pin.toggle();
+                    self.led.red.timer.init(time, 100_000)
+                }
             }
             BoardDemoMode::DataReport => {
                 self.counter += 1;
@@ -382,19 +466,43 @@ impl BoardDemo {
                 self.formatln(format_args!("{}Temperature: {:.2} °C", TAB, temperature));
                 self.formatln(format_args!("{}Counter = {}", TAB, counter));
 
+                // Prepare timer for temperature sensor
+                let time = self.get_systick_us();
+                self.temp_sensor.timer.init(time, 100_000);
                 self.mode.change();
             }
             BoardDemoMode::ContTempReport => {
-                let temperature = self.get_temperature();
-                self.formatln(format_args!("{}T = {:.2} °C", TAB, temperature));
-                self.delay(50_000);
+                let time = self.get_systick_us();
+
+                if self.temp_sensor.timer.check_expired(time) {
+                    let temperature = self.get_temperature();
+                    self.formatln(format_args!("{}T = {:.2} °C", TAB, temperature));
+
+                    self.temp_sensor.timer.init(time, 100_000);
+                }
             }
             _ => { /* Do nothing in Idle state */ }
         }
     }
 
-    pub fn delay(&mut self, us: u32) {
-        self.sys_delay.delay_us(us);
+    pub fn delay(&mut self, time_us: u32) {
+        let t1 = self.get_systick_us();
+        let mut t2 = t1;
+
+        while (t1 + time_us as u64) > t2 {
+            t2 = self.get_systick_us();
+        }
+    }
+
+    pub fn get_systick_us(&mut self) -> u64 {
+        let mut systick: u64 = 0;
+
+        free(|cs| {
+            systick = SYSTICK_US.borrow(cs).get();
+            systick += self.sys_counter.now().ticks() as u64;
+        });
+
+        systick
     }
 
     pub fn println(&mut self, s: &str) {
@@ -416,5 +524,15 @@ fn EXTI15_10() {
 
         // Signal that the interrupt fired
         SEMAPHORE.borrow(cs).set(false);
+    });
+}
+
+#[exception]
+fn SysTick() {
+    free(|cs| {
+        // Increment with 1 ms the SYSTICK_US
+        let mut systick = SYSTICK_US.borrow(cs).get();
+        systick += 1000; // 1000 us
+        SYSTICK_US.borrow(cs).set(systick);
     });
 }
