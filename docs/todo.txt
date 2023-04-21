@@ -1,3 +1,5 @@
 x (A) Create @docs folder
 x (B) Create todo.txt file
-(C) Add more content to @docs folder
+x (C) Add more content to @docs folder
+(D) Define @docs folder structure
+(E) Add +markdown files for documentation
