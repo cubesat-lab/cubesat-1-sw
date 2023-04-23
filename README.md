@@ -23,8 +23,6 @@ Build and Flash the Firmware
         *Run the command below and follow the on-screen instructions*
         ```bash
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-        ```
-        ```bash
         sudo apt install libudev-dev
         ```
     - Windows
@@ -57,10 +55,9 @@ Build and Flash the Firmware
     ```bash
     cargo install cargo-flash
     ```
-- ST-LINK USB driver
-    - Windows
+- ST-LINK USB driver (for Windows only)
 
-        Download and install it from [here](https://www.st.com/en/development-tools/stsw-link009.html)
+    Download and install it from [here](https://www.st.com/en/development-tools/stsw-link009.html)
 
 ### Complete
 
@@ -72,16 +69,17 @@ Design, Development, Testing, Debugging, etc.
 
 #### Steps
 - [Git](https://git-scm.com/downloads)
-- [VSCode](https://code.visualstudio.com/)
-    - Extensions:
-        - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-        - [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml)
-        - [Structurizr](https://marketplace.visualstudio.com/items?itemName=ciarant.vscode-structurizr)
+- IDE
+    - [VSCode](https://code.visualstudio.com/) (Recommended IDE)
+        - Extensions:
+            - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+            - [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml)
+            - [Structurizr](https://marketplace.visualstudio.com/items?itemName=ciarant.vscode-structurizr)
 - [Python](https://www.python.org/downloads/)
 - [Docker](https://www.docker.com/)
     - Setup [GitHub Actions](https://docs.github.com/en/actions) locally with [act](https://github.com/nektos/act)
     - [Structurizr Lite](https://structurizr.com/share/76352/documentation) for visualizing SW Architecture diagrams
-- gcc and gdb for arm
+- `gcc` and `gdb` for ARM
     - Linux (Ubuntu 22.04)
 
         gcc-arm-embedded
