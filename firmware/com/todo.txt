@@ -1,3 +1,0 @@
-x (A) Create @com folder
-x (B) Create todo.txt file
-(C) Add cargo project to @com folder

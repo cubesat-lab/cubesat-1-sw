@@ -4,7 +4,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "cargo", 
+            "label": "cargo",
             "type": "shell",
             "options": {
                 "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}"
@@ -15,12 +15,23 @@
             ]
         },
         {
-            "label": "serial", 
+            "label": "serial",
             "type": "shell",
             "options": {
                 "cwd": "${workspaceFolder}/tools"
             },
             "command": "python serial_link.py -p ${input:port}",
+            "problemMatcher": [
+                // TODO: Add if needed
+            ]
+        },
+        {
+            "label": "structurizr",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "command": "docker run -it --rm -p 8080:8080 -v \"${workspaceFolder}/docs:/usr/local/structurizr\" structurizr/lite",
             "problemMatcher": [
                 // TODO: Add if needed
             ]

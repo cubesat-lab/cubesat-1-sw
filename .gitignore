@@ -1,3 +1,7 @@
 # Rust generated files
 **/target
 **/Cargo.lock
+
+# Structurizr generated files
+docs/.structurizr
+docs/workspace.json
