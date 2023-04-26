@@ -23,7 +23,7 @@ Build and Flash the Firmware
         *Run the command below and follow the on-screen instructions*
         ```bash
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-        sudo apt install libudev-dev
+        sudo apt install libudev-dev libssl-dev
         ```
     - Windows
 
