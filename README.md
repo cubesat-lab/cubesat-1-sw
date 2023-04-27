@@ -23,7 +23,7 @@ Build and Flash the Firmware
         *Run the command below and follow the on-screen instructions*
         ```bash
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-        sudo apt install libudev-dev
+        sudo apt install libudev-dev libssl-dev
         ```
     - Windows
 
@@ -76,6 +76,10 @@ Design, Development, Testing, Debugging, etc.
             - [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml)
             - [Structurizr](https://marketplace.visualstudio.com/items?itemName=ciarant.vscode-structurizr)
 - [Python](https://www.python.org/downloads/)
+    - Packages:
+        ```bash
+        pip install pyserial
+        ```
 - [Docker](https://www.docker.com/)
     - Setup [GitHub Actions](https://docs.github.com/en/actions) locally with [act](https://github.com/nektos/act)
     - [Structurizr Lite](https://structurizr.com/share/76352/documentation) for visualizing SW Architecture diagrams
