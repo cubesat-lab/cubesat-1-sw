@@ -13,13 +13,14 @@ use embedded_hal::adc::{Channel as AdcChannel, OneShot};
 use fugit::HertzU32 as Hertz;
 use stm32f7xx_hal::{
     adc::Adc,
-    gpio::{gpioc::PC13, Alternate, Edge, ExtiPin, Floating, Input, Output, Pin},
+    gpio::{gpioc::PC13, PC10, PC11, PC12, Alternate, Edge, ExtiPin, Floating, Input, Output, Pin},
     interrupt,
-    pac::{self, ADC1, ADC_COMMON, TIM3, USART3},
+    pac::{self, ADC1, ADC_COMMON, TIM3, USART3, SPI3},
     prelude::*,
     serial::{self, Serial},
     signature::{Uid, VtempCal110, VtempCal30},
     timer::{Ch, Channel, PwmHz, SysCounter, SysEvent},
+    spi::{self, Spi, Enabled, Error},
 };
 
 // Semaphore for synchronization
@@ -167,6 +168,11 @@ struct BoardDemoSerial {
     rx: stm32f7xx_hal::serial::Rx<USART3>,
 }
 
+struct BoardDemoSpi {    
+    spi : Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>>,
+    ncs : Pin<'C', 9, Output>,
+}
+
 pub struct BoardDemo {
     mode: BoardDemoMode,
     mcu_uid: BoardDemoMcuUid,
@@ -176,6 +182,7 @@ pub struct BoardDemo {
     adc: BoardDemoAdc,
     temp_sensor: BoardDemoTemperatureSensor,
     serial: BoardDemoSerial,
+    spi: BoardDemoSpi,
     sys_counter: SysCounter<1000000>,
     gdb: bool,
 }
@@ -267,6 +274,25 @@ impl BoardDemo {
         // Copy lot number slice from UID
         let mut lot_num: [u8; 7] = Default::default();
         lot_num.clone_from_slice(Uid::get().lot_num().as_bytes());
+   
+        let mut ncs = gpioc.pc9.into_push_pull_output();
+        let sck = gpioc.pc10.into_alternate();
+        let miso = gpioc.pc11.into_alternate();
+        let mosi = gpioc.pc12.into_alternate();
+        
+        // Set NCS pin to high (disabled) initially
+        ncs.set_high();
+
+        // Initialize SPI
+        let spi = Spi::new(pac_obj.SPI3, (sck, miso, mosi)).enable::<u8>(
+            spi::Mode {
+                polarity: spi::Polarity::IdleHigh,
+                phase: spi::Phase::CaptureOnSecondTransition,
+            },
+            250.kHz(),
+            &clocks,
+            &mut rcc.apb1,
+        );
 
         BoardDemo {
             mode: BoardDemoMode::GreenLedPulse,
@@ -308,6 +334,10 @@ impl BoardDemo {
             serial: BoardDemoSerial {
                 tx: serial_tx,
                 rx: serial_rx,
+            }, 
+            spi: BoardDemoSpi {
+                spi,
+                ncs,
             },
             sys_counter: sys_counter_obj,
             gdb,
@@ -483,6 +513,26 @@ impl BoardDemo {
             }
             _ => { /* Do nothing in Idle state */ }
         }
+    }
+
+    pub fn spi_write(&mut self, buffer: &mut [u8]) -> Result<(), Error> {
+        self.spi.spi.write(buffer)
+    }
+
+
+    // read bytes function
+    pub fn spi_transfer<'a>(&'a mut self, buffer: &'a mut [u8]) -> Result<&[u8], Error>{
+        self.spi.spi.transfer(buffer)
+    }
+
+    // NCS set low
+    pub fn spi_ncs_set_low(&mut self) {
+        self.spi.ncs.set_low();
+    }
+
+    // NCS set high
+    pub fn spi_ncs_set_high(&mut self) {
+        self.spi.ncs.set_high();
     }
 
     pub fn delay(&mut self, time_us: u32) {
