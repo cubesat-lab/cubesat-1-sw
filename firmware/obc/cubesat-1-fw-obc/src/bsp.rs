@@ -1,7 +1,6 @@
 use core::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Write},
-    str::from_utf8,
 };
 use cortex_m::{
     interrupt::{free, Mutex},
@@ -32,53 +31,23 @@ static BUTTON_PIN: Mutex<RefCell<Option<PC13<Input<Floating>>>>> = Mutex::new(Re
 // Globally available SysTick variable
 static SYSTICK_US: Mutex<Cell<u64>> = Mutex::new(Cell::new(0));
 
-static TAB: &str = "    ";
-
-#[derive(Debug, Copy, PartialEq)]
-enum BoardDemoMode {
-    GreenLedPulse,
-    BlueLedBlink,
-    RedLedBlink,
-    DataReport,
-    IdleState,
-    ContTempReport,
-}
-
-impl Clone for BoardDemoMode {
-    fn clone(&self) -> BoardDemoMode {
-        *self
-    }
-}
-
-impl BoardDemoMode {
-    fn change(&mut self) {
-        *self = match *self {
-            BoardDemoMode::GreenLedPulse => BoardDemoMode::BlueLedBlink,
-            BoardDemoMode::BlueLedBlink => BoardDemoMode::RedLedBlink,
-            BoardDemoMode::RedLedBlink => BoardDemoMode::DataReport,
-            BoardDemoMode::DataReport => BoardDemoMode::IdleState,
-            BoardDemoMode::IdleState => BoardDemoMode::ContTempReport,
-            BoardDemoMode::ContTempReport => BoardDemoMode::GreenLedPulse,
-        };
-    }
-}
-
+#[allow(dead_code)]
 #[derive(Debug, Copy)]
-struct BoardDemoMcuUid {
+struct BspMcuUid {
     x: u16,           // X coordinate on wafer
     y: u16,           // Y coordinate on wafer
     waf_num: u8,      // Wafer number
     lot_num: [u8; 7], // Lot number
 }
 
-impl Clone for BoardDemoMcuUid {
-    fn clone(&self) -> BoardDemoMcuUid {
+impl Clone for BspMcuUid {
+    fn clone(&self) -> BspMcuUid {
         *self
     }
 }
 
 #[allow(dead_code)]
-struct BoardDemoGpio {
+struct BspGpio {
     led_blue: Pin<'B', 7, Output>,
     led_red: Pin<'B', 14, Output>,
 }
@@ -95,11 +64,13 @@ impl Default for TimerUs {
 }
 
 impl TimerUs {
+    #[allow(dead_code)]
     fn init(&mut self, time: u64, period: u64) {
         self.init = time;
         self.period = period;
     }
 
+    #[allow(dead_code)]
     fn check_expired(&mut self, time: u64) -> bool {
         if (self.init + self.period) >= time {
             return false;
@@ -109,25 +80,29 @@ impl TimerUs {
     }
 }
 
-struct BoardDemoLedAttr<T> {
+#[allow(dead_code)]
+struct BspLedAttr<T> {
     pin: T,
     timer: TimerUs,
 }
 
-struct BoardDemoLed {
-    blue: BoardDemoLedAttr<Pin<'B', 7, Output>>,
-    red: BoardDemoLedAttr<Pin<'B', 14, Output>>,
+#[allow(dead_code)]
+struct BspLed {
+    blue: BspLedAttr<Pin<'B', 7, Output>>,
+    red: BspLedAttr<Pin<'B', 14, Output>>,
 }
 
-struct BoardDemoPwmAttr<T> {
+#[allow(dead_code)]
+struct BspPwmAttr<T> {
     pin: T,
     max_duty: u16,
     current_duty: u16,
     last_duty: u16,
 }
 
-struct BoardDemoPwm {
-    led_green: BoardDemoPwmAttr<PwmHz<TIM3, Ch<2>, Pin<'B', 0, Alternate<2>>>>,
+#[allow(dead_code)]
+struct BspPwm {
+    led_green: BspPwmAttr<PwmHz<TIM3, Ch<2>, Pin<'B', 0, Alternate<2>>>>,
 }
 
 struct AdcTemperatureSensor;
@@ -140,54 +115,55 @@ impl AdcChannel<ADC1> for AdcTemperatureSensor {
 }
 
 #[allow(dead_code)]
-struct BoardDemoAdc {
+struct BspAdc {
     adc_common: ADC_COMMON,
     adc1: Adc<ADC1>,
     adc_ch_ts: AdcTemperatureSensor,
 }
 
-struct BoardDemoTemperatureSensor {
+#[allow(dead_code)]
+struct BspTemperatureSensor {
     cal30: u16,
     cal110: u16,
     timer: TimerUs,
 }
 
 #[allow(dead_code)]
-struct BoardDemoBtnAttr<T> {
+struct BspBtnAttr<T> {
     pin: T,
 }
 
 #[allow(dead_code)]
-struct BoardDemoBtn {
-    btn_b1_user: BoardDemoBtnAttr<Pin<'C', 13, Input>>,
+struct BspBtn {
+    btn_b1_user: BspBtnAttr<Pin<'C', 13, Input>>,
 }
 
 #[allow(dead_code)]
-struct BoardDemoSerial {
+struct BspSerial {
     tx: stm32f7xx_hal::serial::Tx<USART3>,
     rx: stm32f7xx_hal::serial::Rx<USART3>,
 }
 
-struct BoardDemoSpi {
+struct BspSpi {
     spi: Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>>,
     cs: Pin<'C', 9, Output>,
 }
 
-pub struct BoardDemo {
-    mode: BoardDemoMode,
-    mcu_uid: BoardDemoMcuUid,
-    counter: u32,
-    led: BoardDemoLed,
-    pwm: BoardDemoPwm,
-    adc: BoardDemoAdc,
-    temp_sensor: BoardDemoTemperatureSensor,
-    serial: BoardDemoSerial,
-    spi: BoardDemoSpi,
+#[allow(dead_code)]
+pub struct Bsp {
+    mcu_uid: BspMcuUid,
+    led: BspLed,
+    pwm: BspPwm,
+    adc: BspAdc,
+    temp_sensor: BspTemperatureSensor,
+    serial: BspSerial,
+    spi: BspSpi,
     sys_counter: SysCounter<1000000>,
     gdb: bool,
 }
 
-impl BoardDemo {
+#[allow(dead_code)]
+impl Bsp {
     pub fn init(gdb: bool) -> Self {
         // Initialize Peripheral Access
         let pac_obj = pac::Peripherals::take().unwrap();
@@ -295,48 +271,46 @@ impl BoardDemo {
             &mut rcc.apb1,
         );
 
-        BoardDemo {
-            mode: BoardDemoMode::GreenLedPulse,
-            mcu_uid: BoardDemoMcuUid {
+        Bsp {
+            mcu_uid: BspMcuUid {
                 x: Uid::get().x(),
                 y: Uid::get().y(),
                 waf_num: Uid::get().waf_num(),
                 lot_num,
             },
-            counter: 0,
-            led: BoardDemoLed {
-                blue: BoardDemoLedAttr {
+            led: BspLed {
+                blue: BspLedAttr {
                     pin: pin_led_blue,
                     timer: TimerUs::default(),
                 },
-                red: BoardDemoLedAttr {
+                red: BspLedAttr {
                     pin: pin_led_red,
                     timer: TimerUs::default(),
                 },
             },
-            pwm: BoardDemoPwm {
-                led_green: BoardDemoPwmAttr {
+            pwm: BspPwm {
+                led_green: BspPwmAttr {
                     pin: pwm_led_green,
                     max_duty: max_duty_cycle,
                     current_duty: 0,
                     last_duty: 0,
                 },
             },
-            adc: BoardDemoAdc {
+            adc: BspAdc {
                 adc_common,
                 adc1,
                 adc_ch_ts: AdcTemperatureSensor,
             },
-            temp_sensor: BoardDemoTemperatureSensor {
+            temp_sensor: BspTemperatureSensor {
                 cal30: VtempCal30::get().read(),
                 cal110: VtempCal110::get().read(),
                 timer: TimerUs::default(),
             },
-            serial: BoardDemoSerial {
+            serial: BspSerial {
                 tx: serial_tx,
                 rx: serial_rx,
             },
-            spi: BoardDemoSpi { spi, cs },
+            spi: BspSpi { spi, cs },
             sys_counter: sys_counter_obj,
             gdb,
         }
@@ -371,7 +345,6 @@ impl BoardDemo {
         self.println(cubesat);
         self.println(hello_world);
         self.println(" \n");
-        self.report_mode();
 
         // gdb print
         if self.gdb {
@@ -379,69 +352,8 @@ impl BoardDemo {
         }
     }
 
-    fn play_pwm_led_green(&mut self) {
-        let last_duty_frozen = self.pwm.led_green.last_duty;
-        let step = 1;
-
-        self.pwm
-            .led_green
-            .pin
-            .set_duty(Channel::C3, self.pwm.led_green.current_duty);
-
-        self.pwm.led_green.last_duty = self.pwm.led_green.current_duty;
-
-        if self.pwm.led_green.current_duty == 0 {
-            self.pwm.led_green.current_duty += step;
-        } else if last_duty_frozen < self.pwm.led_green.current_duty {
-            if (self.pwm.led_green.current_duty + step) > self.pwm.led_green.max_duty {
-                self.pwm.led_green.current_duty = self.pwm.led_green.max_duty;
-            } else {
-                self.pwm.led_green.current_duty += step;
-            }
-        } else if self.pwm.led_green.current_duty == self.pwm.led_green.max_duty {
-            self.pwm.led_green.current_duty -= step;
-        } else if last_duty_frozen > self.pwm.led_green.current_duty {
-            if self.pwm.led_green.current_duty < step {
-                self.pwm.led_green.current_duty = 0;
-            } else {
-                self.pwm.led_green.current_duty -= step;
-            }
-        }
-
-        self.delay(1);
-    }
-
-    fn stop_pwm_led_green(&mut self) {
-        self.pwm.led_green.last_duty = 0;
-        self.pwm.led_green.current_duty = 0;
-        self.pwm.led_green.pin.set_duty(Channel::C3, 0);
-    }
-
-    fn report_mode(&mut self) {
-        let mode = self.mode;
-        self.formatln(format_args!("Mode: [{:?}]", mode));
-    }
-
     fn on_button_action(&mut self) {
-        self.mode.change();
-
-        // Perform necessary steps before transition into a new state
-        // Start timers, turn off LEDs, etc.
-        if self.mode == BoardDemoMode::BlueLedBlink {
-            self.stop_pwm_led_green();
-
-            let time = self.get_systick_us();
-            self.led.blue.timer.init(time, 500_000);
-        } else if self.mode == BoardDemoMode::RedLedBlink {
-            self.led.blue.pin.set_low();
-
-            let time = self.get_systick_us();
-            self.led.red.timer.init(time, 100_000);
-        } else if self.mode == BoardDemoMode::DataReport {
-            self.led.red.pin.set_low();
-        }
-
-        self.report_mode();
+        // user code
     }
 
     pub fn cyclic(&mut self) {
@@ -454,63 +366,6 @@ impl BoardDemo {
                 SEMAPHORE.borrow(cs).set(true);
             }
         });
-
-        match self.mode {
-            BoardDemoMode::GreenLedPulse => {
-                self.play_pwm_led_green();
-            }
-            BoardDemoMode::BlueLedBlink => {
-                let time = self.get_systick_us();
-
-                if self.led.blue.timer.check_expired(time) {
-                    self.led.blue.pin.toggle();
-                    self.led.blue.timer.init(time, 500_000)
-                }
-            }
-            BoardDemoMode::RedLedBlink => {
-                let time = self.get_systick_us();
-
-                if self.led.red.timer.check_expired(time) {
-                    self.led.red.pin.toggle();
-                    self.led.red.timer.init(time, 100_000)
-                }
-            }
-            BoardDemoMode::DataReport => {
-                self.counter += 1;
-                let counter = self.counter;
-                let mcu_uid = self.mcu_uid;
-                let temperature = self.get_temperature();
-
-                self.formatln(format_args!("{}UID:", TAB));
-                self.formatln(format_args!("{}{}waf_x:   {}", TAB, TAB, mcu_uid.x));
-                self.formatln(format_args!("{}{}waf_y:   {}", TAB, TAB, mcu_uid.y));
-                self.formatln(format_args!("{}{}waf_num: {}", TAB, TAB, mcu_uid.waf_num));
-                self.formatln(format_args!(
-                    "{}{}lot_num: {}",
-                    TAB,
-                    TAB,
-                    from_utf8(&mcu_uid.lot_num).unwrap()
-                ));
-                self.formatln(format_args!("{}Temperature: {:.2} °C", TAB, temperature));
-                self.formatln(format_args!("{}Counter = {}", TAB, counter));
-
-                // Prepare timer for temperature sensor
-                let time = self.get_systick_us();
-                self.temp_sensor.timer.init(time, 100_000);
-                self.mode.change();
-            }
-            BoardDemoMode::ContTempReport => {
-                let time = self.get_systick_us();
-
-                if self.temp_sensor.timer.check_expired(time) {
-                    let temperature = self.get_temperature();
-                    self.formatln(format_args!("{}T = {:.2} °C", TAB, temperature));
-
-                    self.temp_sensor.timer.init(time, 100_000);
-                }
-            }
-            _ => { /* Do nothing in Idle state */ }
-        }
     }
 
     /// Sends bytes to the slave chip
