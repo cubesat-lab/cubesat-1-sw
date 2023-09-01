@@ -15,6 +15,7 @@ cortex-m = "0.7.7"
 cortex-m-semihosting = "0.5.0"
 fugit = "0.3.6"
 embedded-hal = "0.2.7"
+cc1101 = "0.0.3"
 
 [dependencies.stm32f7xx-hal]
 version = "0.7.0"

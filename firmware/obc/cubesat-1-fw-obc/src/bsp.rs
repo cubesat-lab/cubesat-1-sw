@@ -144,9 +144,9 @@ struct BspSerial {
     rx: stm32f7xx_hal::serial::Rx<USART3>,
 }
 
-struct BspSpi {
-    spi: Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>>,
-    cs: Pin<'C', 9, Output>,
+pub struct BspSpi {
+    pub spi: Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>>,
+    pub cs: Pin<'C', 9, Output>,
 }
 
 #[allow(dead_code)]
@@ -157,7 +157,7 @@ pub struct Bsp {
     adc: BspAdc,
     temp_sensor: BspTemperatureSensor,
     serial: BspSerial,
-    spi: BspSpi,
+    pub spi: BspSpi,
     sys_counter: SysCounter<1000000>,
     gdb: bool,
 }
@@ -367,6 +367,14 @@ impl Bsp {
             }
         });
     }
+
+    // pub fn get_spi(&mut self) -> Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>> {
+    //     self.spi.spi
+    // }
+
+    // pub fn get_cs(&mut self) -> u8 {
+    //     0
+    // }
 
     /// Sends bytes to the slave chip
     #[allow(dead_code)]
