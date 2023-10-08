@@ -1,0 +1,13 @@
+[package]
+authors = ["Andrei Basarab <andy.basarab@gmail.com>"]
+name = "cc1101-wrapper"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex-m = "0.7.7"
+embedded-hal = "0.2.7"
+panic-halt = "0.2.0"
+cc1101 = { path = "../../drivers/cc1101", version = "0.0.3" }
