@@ -368,13 +368,14 @@ impl Bsp {
         });
     }
 
-    // pub fn get_spi(&mut self) -> Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>> {
-    //     self.spi.spi
-    // }
-
-    // pub fn get_cs(&mut self) -> u8 {
-    //     0
-    // }
+    pub fn get_spi_cs(
+        &mut self,
+    ) -> (
+        &mut Spi<SPI3, (PC10<Alternate<6>>, PC11<Alternate<6>>, PC12<Alternate<6>>), Enabled<u8>>,
+        &mut Pin<'C', 9, Output>,
+    ) {
+        (&mut self.spi.spi, &mut self.spi.cs)
+    }
 
     /// Sends bytes to the slave chip
     #[allow(dead_code)]
