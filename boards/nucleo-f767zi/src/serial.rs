@@ -1,9 +1,10 @@
-use core::fmt::{Arguments, Write};
+use core::fmt::{Arguments, Write as WriteFmt};
+use embedded_hal::serial::{Read, Write};
 use stm32f7xx_hal::{
     gpio::{Alternate, Pin},
     pac::USART3,
     rcc::Clocks,
-    serial::{self, Instance, PinRx, PinTx, Rx, Serial, Tx},
+    serial::{self, Error, Instance, PinRx, PinTx, Rx, Serial, Tx},
 };
 
 pub struct SerialUart<UART, const P: char, const N_TX: u8, const N_RX: u8, const A: u8> {
@@ -35,6 +36,14 @@ where
         let (tx, rx) = serial.split();
 
         Self { tx, rx }
+    }
+
+    pub fn read(&mut self) -> nb::Result<u8, Error> {
+        self.rx.read()
+    }
+
+    pub fn write(&mut self, byte: u8) -> nb::Result<(), Error> {
+        self.tx.write(byte)
     }
 
     pub fn println(&mut self, s: &str) {

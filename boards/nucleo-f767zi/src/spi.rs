@@ -2,7 +2,7 @@ use embedded_hal::blocking::spi::{Transfer, Write};
 use fugit::RateExtU32;
 use stm32f7xx_hal::{
     gpio::{Alternate, Output, Pin},
-    pac::SPI3,
+    pac::{SPI3, SPI4},
     rcc::{BusClock, Clocks, Enable, RccBus},
     spi::{self, Enabled, Error, Instance, Miso, Mosi, Sck, Spi},
 };
@@ -108,3 +108,4 @@ where
 }
 
 pub type SpiMaster3 = SpiMaster<SPI3, 'C', 9, 'C', 10, 6, 'C', 11, 6, 'C', 12, 6>;
+pub type SpiMaster4 = SpiMaster<SPI4, 'E', 4, 'E', 2, 5, 'E', 5, 5, 'E', 6, 5>;

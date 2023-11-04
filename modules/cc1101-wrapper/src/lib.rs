@@ -18,7 +18,7 @@ use panic_halt as _;
 const FREQUENCY: u64 = 433_000_000; // 433 MHz
 const MODULATION: Modulation = Modulation::BinaryFrequencyShiftKeying;
 const SYNC_MODE: SyncMode = SyncMode::MatchFull(0xD201);
-const PACKET_LENGTH: PacketLength = PacketLength::Fixed(32);
+const PACKET_LENGTH: PacketLength = PacketLength::Fixed(8);
 const NUM_PREAMBLE_BYTES: NumPreambleBytes = NumPreambleBytes::Two;
 const CCA_MODE: CcaMode = CcaMode::AlwaysClear;
 const CRC_ENABLE: bool = true;
