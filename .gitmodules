@@ -1,0 +1,3 @@
+[submodule "drivers/cc1101"]
+	path = drivers/cc1101
+	url = git@github.com:cubesat-lab/cc1101.git

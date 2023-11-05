@@ -1,0 +1,4 @@
+(A) Test SPI communication with CC1101 board
+(B) Test RF communication between 2 CC1101 boards
+(C) Implement abstraction on top of Serial to send/receive 1024 bytes frames
+(D) Implement frame parsing and construction in the @cc1101_wrapper module

@@ -20,7 +20,9 @@ jobs:
           # - eps
           - obc
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'true'
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -30,7 +32,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --manifest-path ${{ github.workspace }}/firmware/${{ matrix.firmware }}/cubesat-1-fw-${{ matrix.firmware }}/Cargo.toml --target thumbv7em-none-eabihf --verbose
+        args: --manifest-path ${{ github.workspace }}/firmware/${{ matrix.firmware }}/cubesat-1-fw-${{ matrix.firmware }}/Cargo.toml --target thumbv7em-none-eabihf --features nucleo-f767zi-board --verbose
     # - uses: actions-rs/cargo@v1
     #   with:
     #     command: test
