@@ -9,10 +9,23 @@
             "options": {
                 "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}"
             },
-            "command": "cargo ${input:selectCargoCmd}",
+            "command": "cargo ${input:selectCargoCmd} --features ${input:selectBoard}",
             "problemMatcher": [
                 "$rustc"
-            ]
+            ],
+            "icon": {"id": "symbol-constructor", "color": "terminal.ansiWhite"}
+        },
+        {
+            "label": "cargo flash",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}"
+            },
+            "command": "cargo flash --features ${input:selectBoard} --chip ${input:selectChip}",
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "icon": {"id": "circuit-board", "color": "terminal.ansiWhite"}
         },
         {
             "label": "serial",
@@ -23,7 +36,8 @@
             "command": "python serial_link.py -p ${input:port}",
             "problemMatcher": [
                 // TODO: Add if needed
-            ]
+            ],
+            "icon": {"id": "arrow-swap", "color": "terminal.ansiWhite"}
         },
         {
             "label": "structurizr",
@@ -34,10 +48,72 @@
             "command": "docker run -it --rm -p 8080:8080 -v \"${workspaceFolder}/docs:/usr/local/structurizr\" structurizr/lite",
             "problemMatcher": [
                 // TODO: Add if needed
-            ]
+            ],
+            "icon": {"id": "symbol-structure", "color": "terminal.ansiWhite"}
         }
     ],
     "inputs": [
+        {
+            "id": "selectCargoCmd",
+            "type": "pickString",
+            "description": "Which cargo command?",
+            "options": [
+                // "add",
+                // "bench",
+                "build",
+                "check",
+                "clean",
+                // "clippy",
+                // "config",
+                "doc",
+                // "fetch",
+                // "fix",
+                // "flash --chip STM32F767ZITx",
+                "fmt",
+                // "generate-lockfile",
+                // "git-checkout",
+                // "help",
+                // "init",
+                // "install",
+                // "locate-project",
+                // "login",
+                // "logout",
+                // "metadata",
+                // "miri",
+                // "new",
+                // "owner",
+                // "package",
+                // "pkgid",
+                // "publish",
+                // "read-manifest",
+                // "remove",
+                // "report",
+                // "rm",
+                "run",
+                // "rustc",
+                // "rustdoc",
+                // "search",
+                "test",
+                // "tree",
+                // "uninstall",
+                // "update",
+                // "vendor",
+                // "verify-project",
+                // "version",
+                // "yank",
+            ],
+            "default": "build"
+        },
+        {
+            "id": "selectBoard",
+            "type": "pickString",
+            "description": "Which Board?",
+            "options": [
+                {"label": "NUCLEO-F767ZI", "value": "nucleo-f767zi-board"},
+                {"label": "STM32VLDISCOVERY", "value": "stm32vldiscovery"},
+            ],
+            "default": "nucleo-f767zi-board"
+        },
         {
             "id": "fw",
             "type": "pickString",
@@ -47,62 +123,23 @@
                 {"label": "COM", "value": "com"},
                 {"label": "EPS", "value": "eps"},
                 {"label": "OBC", "value": "obc"},
-            ]
+            ],
+            "default": "obc"
         },
         {
-            "id": "selectCargoCmd",
+            "id": "selectChip",
             "type": "pickString",
-            "description": "Which cargo command?",
+            "description": "Which Chip?",
             "options": [
-                "add",
-                "bench",
-                "build",
-                "check",
-                "clean",
-                "clippy",
-                "config",
-                "doc",
-                "fetch",
-                "fix",
-                "flash --chip STM32F767ZITx",
-                "fmt",
-                "generate-lockfile",
-                "git-checkout",
-                "help",
-                "init",
-                "install",
-                "locate-project",
-                "login",
-                "logout",
-                "metadata",
-                "miri",
-                "new",
-                "owner",
-                "package",
-                "pkgid",
-                "publish",
-                "read-manifest",
-                "remove",
-                "report",
-                "rm",
-                "run",
-                "rustc",
-                "rustdoc",
-                "search",
-                "test",
-                "tree",
-                "uninstall",
-                "update",
-                "vendor",
-                "verify-project",
-                "version",
-                "yank",
+                {"label": "STM32F767ZI", "value": "STM32F767ZITx"},
             ],
+            "default": "STM32F767ZITx"
         },
         {
             "id": "port",
             "type": "promptString",
             "description": "Serial port",
+            // "default": "your_com_port",
         },
     ]
 }

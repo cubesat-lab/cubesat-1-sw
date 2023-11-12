@@ -2,23 +2,31 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use cc1101_wrapper::Cc1101Wrapper;
 use fugit::HertzU32;
 use nucleo_f767zi::{
     button::Button,
     led::{LedBlue, LedGreen, LedRed},
     serial::SerialUartUsb,
-    spi::SpiMaster3,
 };
 use panic_halt as _;
 use rtic::app;
 use rtic_monotonics::systick::Systick;
 use rtic_monotonics::Monotonic;
-use stm32f7xx_hal::{gpio::Edge, prelude::*};
+use stm32f7xx_hal::{
+    gpio::{Edge, PinState},
+    prelude::*,
+};
 
-#[app(device = stm32f7xx_hal::pac, dispatchers = [TIM2])]
+#[app(device = stm32f7xx_hal::pac)]
 mod app {
     use super::*;
+
+    // Led States
+    pub enum LedState {
+        Red,
+        Blue,
+        Green,
+    }
 
     #[shared]
     struct Shared {
@@ -28,6 +36,7 @@ mod app {
     #[local]
     struct Local {
         button: Button,
+        led_state: LedState,
         led_green: LedGreen,
         led_blue: LedBlue,
         led_red: LedRed,
@@ -53,25 +62,19 @@ mod app {
         Systick::start(cp.SYST, (216.MHz() as HertzU32).to_Hz(), systick_token);
 
         // Initialize LEDs
-        let led_green = LedGreen::new(gpiob.pb0);
-        let led_blue = LedBlue::new(gpiob.pb7);
-        let led_red = LedRed::new(gpiob.pb14);
+        let mut led_green = LedGreen::new(gpiob.pb0);
+        let mut led_blue = LedBlue::new(gpiob.pb7);
+        let mut led_red = LedRed::new(gpiob.pb14);
+
+        // Initialize Led state
+        let led_state = LedState::Red;
+        led_green.set_state(PinState::Low);
+        led_blue.set_state(PinState::Low);
+        led_red.set_state(PinState::High);
 
         // Initialize UART for serial communication through USB
         let mut serial = SerialUartUsb::new(dp.USART3, &clocks, gpiod.pd8, gpiod.pd9);
-
         serial.println("Hello RTIC!");
-
-        // Initialize SPI3
-        let spi_3 = SpiMaster3::new(
-            dp.SPI3,
-            &clocks,
-            &mut rcc.apb1,
-            gpioc.pc9,
-            gpioc.pc10,
-            gpioc.pc11,
-            gpioc.pc12,
-        );
 
         // Initialize User Button
         let mut syscfg = dp.SYSCFG;
@@ -79,17 +82,11 @@ mod app {
         let mut button = Button::new(gpioc.pc13);
         button.enable_interrupt(Edge::Rising, &mut syscfg, &mut exti, &mut rcc.apb2);
 
-        // Initialize CC1101 Wrapper - RF Device 1
-        let mut cc1101_wrp_1 = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
-        cc1101_wrp_1.configure_radio().unwrap();
-
-        // Spawn tasks
-        task_10ms::spawn().ok();
-
         (
             Shared { serial },
             Local {
                 button,
+                led_state,
                 led_green,
                 led_blue,
                 led_red,
@@ -97,43 +94,48 @@ mod app {
         )
     }
 
-    #[task(priority = 1, shared = [serial])]
-    async fn task_10ms(mut ctx: task_10ms::Context) {
+    #[idle(shared = [serial])]
+    fn idle(mut ctx: idle::Context) -> ! {
         loop {
-            let mut instant = Systick::now();
-            instant += 10.millis();
-
-            let _10ms_task = {
-                // Lock shared "serial" resource. Use it in the critical section
+            let _idle_task = {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
-                        "[task_10ms] time: {}",
+                        "[idle] time: {}",
                         Systick::now().duration_since_epoch()
                     ));
                 });
-            };
-
-            Systick::delay_until(instant).await;
-        }
-    }
-
-    #[idle(shared = [serial])]
-    fn idle(mut _ctx: idle::Context) -> ! {
-        loop {
-            let _idle_task = {
-                // Do nothing
             };
 
             rtic::export::wfi();
         }
     }
 
-    #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[])]
+    #[task(binds = EXTI15_10, local = [button, led_state, led_green, led_blue, led_red], shared=[])]
     fn button_pressed(ctx: button_pressed::Context) {
-        // Obtain access to LEDs Peripheral and toggle them
-        ctx.local.led_green.toggle();
-        ctx.local.led_blue.toggle();
-        ctx.local.led_red.toggle();
+        // Obtain access to LEDs Peripheral
+        let led_state = ctx.local.led_state;
+        let led_green = ctx.local.led_green;
+        let led_blue = ctx.local.led_blue;
+        let led_red = ctx.local.led_red;
+
+        // Perform actions on the Button push event
+        match led_state {
+            LedState::Red => {
+                *led_state = LedState::Blue;
+                led_red.toggle();
+                led_blue.toggle();
+            }
+            LedState::Blue => {
+                *led_state = LedState::Green;
+                led_blue.toggle();
+                led_green.toggle();
+            }
+            LedState::Green => {
+                *led_state = LedState::Red;
+                led_green.toggle();
+                led_red.toggle();
+            }
+        };
 
         // Obtain access to Button Peripheral and Clear Interrupt Pending Flag
         ctx.local.button.clear_interrupt_pending_bit();
