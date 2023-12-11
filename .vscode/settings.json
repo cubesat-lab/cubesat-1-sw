@@ -2,4 +2,7 @@
     "rust-analyzer.linkedProjects": ["${workspaceFolder}/firmware/obc/cubesat-1-fw-obc/Cargo.toml"],
     "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
     "rust-analyzer.checkOnSave": false,
+    "rust-analyzer.cargo.features": [
+        "nucleo-f429zi-board"
+    ]
 }

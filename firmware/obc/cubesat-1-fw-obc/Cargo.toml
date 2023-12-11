@@ -23,6 +23,10 @@ cc1101-wrapper = { path = "../../../modules/cc1101-wrapper", version = "0.1.0", 
 nucleo-f767zi = { path = "../../../boards/nucleo-f767zi", version = "0.1.0", optional = true}
 stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"], optional = true}
 
+# "nucleo-f429zi-board" specific dependencies
+nucleo-f429zi = { path = "../../../boards/nucleo-f429zi", version = "0.1.0", optional = true}
+stm32f4xx-hal = { version = "0.18.0", features = ["stm32f429", "rt"], optional = true}
+
 # "stm32vldiscovery" specific dependencies
 stm32f1xx-hal = { version = "0.10.0", features = ["rt", "stm32f100", "medium"], optional = true}
 
@@ -33,6 +37,7 @@ panic-semihosting = "0.6.0"
 
 [features]
 nucleo-f767zi-board = ["cc1101-wrapper", "nucleo-f767zi", "stm32f7xx-hal"]
+nucleo-f429zi-board = ["cc1101-wrapper", "nucleo-f429zi", "stm32f4xx-hal"]
 stm32vldiscovery = ["stm32f1xx-hal"]
 
 
@@ -43,6 +48,10 @@ required-features = ["nucleo-f767zi-board"]
 [[example]]
 name = "hello_cubesat"
 required-features = ["nucleo-f767zi-board"]
+
+[[example]]
+name = "hello_cubesat_f4"
+required-features = ["nucleo-f429zi-board"]
 
 [[example]]
 name = "hello_stm32vldiscovery"

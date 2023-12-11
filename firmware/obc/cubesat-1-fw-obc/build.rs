@@ -19,6 +19,7 @@ fn main() -> Result<(), Error> {
 fn copy_memory_config(target: Target) -> Result<(), Error> {
     let memory_x = match target.board {
         Board::NucleoF767zi => include_bytes!("memory_stm32f7xx.x").as_ref(),
+        Board::NucleoF429zi => include_bytes!("memory_stm32f4xx.x").as_ref(),
         Board::Stm32vldiscovery => include_bytes!("memory_stm32vldiscovery.x").as_ref(),
     };
 
@@ -30,6 +31,7 @@ fn copy_memory_config(target: Target) -> Result<(), Error> {
     // Tell Cargo where to find the file.
     println!("cargo:rustc-link-search={}", out_dir.display());
 
+    println!("cargo:rerun-if-changed=memory_stm32f4xx.x");
     println!("cargo:rerun-if-changed=memory_stm32f7xx.x");
     println!("cargo:rerun-if-changed=memory_stm32vldiscovery.x");
 
@@ -51,6 +53,7 @@ impl Target {
 #[derive(Clone, Copy, PartialEq)]
 enum Board {
     NucleoF767zi,
+    NucleoF429zi,
     Stm32vldiscovery,
 }
 
@@ -58,6 +61,8 @@ impl Board {
     fn read() -> Self {
         if cfg!(feature = "nucleo-f767zi-board") {
             Board::NucleoF767zi
+        } else if cfg!(feature = "nucleo-f429zi-board") {
+            Board::NucleoF429zi
         } else if cfg!(feature = "stm32vldiscovery") {
             Board::Stm32vldiscovery
         } else {

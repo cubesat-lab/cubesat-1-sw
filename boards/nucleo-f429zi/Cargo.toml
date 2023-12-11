@@ -1,0 +1,15 @@
+[package]
+authors = ["Ciprian Barbu <ciprian.barbu@gmail.com>"]
+name = "nucleo-f429zi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.2"
+embedded-hal = "0.2.7"
+fugit = "0.3.6"
+nb = "1.0"
+stm32f4xx-hal = { version = "0.18.0", features = ["stm32f429", "rt"] }
