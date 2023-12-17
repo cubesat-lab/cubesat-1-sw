@@ -26,7 +26,7 @@ jobs:
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: nightly-2023-06-20
+        toolchain: nightly-2023-12-17
         target: thumbv7em-none-eabihf
         override: true
     - uses: actions-rs/cargo@v1
