@@ -1,13 +1,13 @@
 [package]
 authors = ["Andrei Basarab <andy.basarab@gmail.com>"]
-name = "cc1101-wrapper"
+name = "cc1101-async"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cc1101-async = { path = "../../drivers/cc1101-async", version = "0.1.0" }
 embedded-hal = "0.2.7"
-fugit = "0.3.7"
 rtic-monotonics = { version = "1.4.1", features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"] }
+fugit = "0.3.7"
+cc1101 = { path = "../../drivers/cc1101", version = "0.0.3" }

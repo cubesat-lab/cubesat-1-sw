@@ -16,9 +16,12 @@ use rtic_monotonics::systick::Systick;
 use rtic_monotonics::Monotonic;
 use stm32f7xx_hal::{gpio::Edge, prelude::*};
 
-#[app(device = stm32f7xx_hal::pac, dispatchers = [TIM2])]
+#[app(device = stm32f7xx_hal::pac, dispatchers = [TIM2, TIM3])]
 mod app {
     use super::*;
+
+    type SPI = stm32f7xx_hal::spi::Spi<stm32f7xx_hal::pac::SPI3, (stm32f7xx_hal::gpio::Pin<'C', 10, stm32f7xx_hal::gpio::Alternate<6>>, stm32f7xx_hal::gpio::Pin<'C', 11, stm32f7xx_hal::gpio::Alternate<6>>, stm32f7xx_hal::gpio::Pin<'C', 12, stm32f7xx_hal::gpio::Alternate<6>>), stm32f7xx_hal::spi::Enabled<u8>>;
+    type CS = stm32f7xx_hal::gpio::Pin<'C', 9, stm32f7xx_hal::gpio::Output>;
 
     #[shared]
     struct Shared {
@@ -31,6 +34,7 @@ mod app {
         led_green: LedGreen,
         led_blue: LedBlue,
         led_red: LedRed,
+        cc1101_wrp: Cc1101Wrapper<SPI, CS>,
     }
 
     #[init]
@@ -79,12 +83,12 @@ mod app {
         let mut button = Button::new(gpioc.pc13);
         button.enable_interrupt(Edge::Rising, &mut syscfg, &mut exti, &mut rcc.apb2);
 
-        // Initialize CC1101 Wrapper - RF Device 1
-        let mut cc1101_wrp_1 = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
-        cc1101_wrp_1.configure_radio().unwrap();
+        // Initialize CC1101 Wrapper - RF Transceiver
+        let cc1101_wrp = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
 
         // Spawn tasks
         task_10ms::spawn().ok();
+        task_rf_test::spawn().ok();
 
         (
             Shared { serial },
@@ -93,6 +97,7 @@ mod app {
                 led_green,
                 led_blue,
                 led_red,
+                cc1101_wrp,
             },
         )
     }
@@ -103,7 +108,7 @@ mod app {
             let mut instant = Systick::now();
             instant += 10.millis();
 
-            let _10ms_task = {
+            let _task_10ms = {
                 // Lock shared "serial" resource. Use it in the critical section
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
@@ -117,10 +122,27 @@ mod app {
         }
     }
 
+    #[task(priority = 2, local = [cc1101_wrp], shared = [])]
+    async fn task_rf_test(ctx: task_rf_test::Context) {
+
+        ctx.local.cc1101_wrp.configure_radio().unwrap();
+        Systick::delay(10.millis().into()).await;
+        ctx.local.cc1101_wrp.sandbox().await.unwrap();
+        Systick::delay(100.millis().into()).await;
+
+        loop {
+            let _task_rf_test = {
+                // Do nothing
+            };
+
+            Systick::delay(100.millis().into()).await;
+        }
+    }
+
     #[idle(shared = [serial])]
     fn idle(mut _ctx: idle::Context) -> ! {
         loop {
-            let _idle_task = {
+            let _idle = {
                 // Do nothing
             };
 
