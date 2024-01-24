@@ -5,7 +5,7 @@ use cc1101::Error;
 
 pub use cc1101::{
     AddressFilter, Cc1101, CcaMode, MachineState, Modulation, NumPreambleBytes,
-    PacketLength, RadioMode, SyncMode, CommandStrobe
+    PacketLength, RadioMode, SyncMode, CommandStrobe, FIFO_MAX_SIZE
 };
 
 use embedded_hal::blocking::spi::{Transfer, Write};
@@ -26,6 +26,8 @@ pub enum Cc1101AsyncError<SpiE, GpioE> {
     CrcMismatch,
     /// Invalid state read from MARCSTATE register
     InvalidState(u8),
+    /// User Input Error
+    UserInputError(usize),
     /// Platform-dependent SPI-errors, such as IO errors.
     Spi(SpiE),
     /// Platform-dependent GPIO-errors, such as IO errors.
@@ -39,6 +41,7 @@ impl<SpiE, GpioE> From<Error<SpiE, GpioE>> for Cc1101AsyncError<SpiE, GpioE> {
             Error::RxOverflow => Cc1101AsyncError::RxOverflow,
             Error::CrcMismatch => Cc1101AsyncError::CrcMismatch,
             Error::InvalidState(value) => Cc1101AsyncError::InvalidState(value),
+            Error::UserInputError(value) => Cc1101AsyncError::UserInputError(value),
             Error::Spi(inner) => Cc1101AsyncError::Spi(inner),
             Error::Gpio(inner) => Cc1101AsyncError::Gpio(inner),
         }
@@ -122,26 +125,13 @@ where
         Ok(self.cc1101.set_packet_length(length)?)
     }
 
-    // /// Set radio in Receive/Transmit/Idle mode.
-    // pub fn set_radio_mode(&mut self, radio_mode: RadioMode) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
-    //     let target = match radio_mode {
-    //         RadioMode::Receive => {
-    //             self.set_radio_mode(RadioMode::Idle)?;
-    //             self.enable_rx()?;
-    //             MachineState::RX
-    //         }
-    //         RadioMode::Transmit => {
-    //             self.set_radio_mode(RadioMode::Idle)?;
-    //             self.enable_tx()?;
-    //             MachineState::TX
-    //         }
-    //         RadioMode::Idle => {
-    //             self.exit_rx_tx()?;
-    //             MachineState::IDLE
-    //         }
-    //     };
-    //     self.await_machine_state(target)
-    // }
+    pub fn read_tx_bytes(&mut self) -> Result<u8, Cc1101AsyncError<SpiE, GpioE>> {
+        Ok(self.cc1101.read_tx_bytes()?)
+    }
+
+    pub fn read_rx_bytes(&mut self) -> Result<u8, Cc1101AsyncError<SpiE, GpioE>> {
+        Ok(self.cc1101.read_rx_bytes()?)
+    }
 
     pub fn read_machine_state(&mut self) -> Result<MachineState, Cc1101AsyncError<SpiE, GpioE>> {
         Ok(self.cc1101.read_machine_state()?)
@@ -161,7 +151,7 @@ where
     }
 
     pub async fn await_machine_state(&mut self, target_state: MachineState) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
-        let timeout = fugit::ExtU64::millis(6);
+        let timeout = fugit::ExtU64::millis(10);
 
         match Systick::timeout_after(timeout, self.check_machine_state(target_state)).await {
             Ok(_) => Ok(()),
@@ -175,5 +165,35 @@ where
 
     pub fn write_data(&mut self, data: &mut [u8]) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
         Ok(self.cc1101.write_data(data)?)
+    }
+
+    /// Set Radio Mode.
+    pub async fn set_radio_mode(&mut self, radio_mode: RadioMode) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
+
+        // Set "Idle" mode before going into any other mode
+        self.command(CommandStrobe::ExitRxTx)?;
+        self.await_machine_state(MachineState::IDLE).await?;
+
+        match radio_mode {
+            RadioMode::Idle => {
+                // Do nothing
+            }
+            RadioMode::Sleep => {
+                self.command(CommandStrobe::EnterPowerDownMode)?;
+            }
+            RadioMode::Calibrate => {
+                self.command(CommandStrobe::CalFreqSynthAndTurnOff)?;
+                self.await_machine_state(MachineState::MANCAL).await?;
+            }
+            RadioMode::Transmit => {
+                self.command(CommandStrobe::EnableTx)?;
+                self.await_machine_state(MachineState::TX).await?;
+            }
+            RadioMode::Receive => {
+                self.command(CommandStrobe::EnableRx)?;
+                self.await_machine_state(MachineState::RX).await?;
+            }
+        };
+        Ok(())
     }
 }

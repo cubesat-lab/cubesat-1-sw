@@ -2,7 +2,7 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use cc1101_wrapper::Cc1101Wrapper;
+use cc1101_wrapper::{Cc1101Wrapper, Cc1101WrapperError};
 use fugit::HertzU32;
 use nucleo_f767zi::{
     button::Button,
@@ -23,9 +23,18 @@ mod app {
     type SPI = stm32f7xx_hal::spi::Spi<stm32f7xx_hal::pac::SPI3, (stm32f7xx_hal::gpio::Pin<'C', 10, stm32f7xx_hal::gpio::Alternate<6>>, stm32f7xx_hal::gpio::Pin<'C', 11, stm32f7xx_hal::gpio::Alternate<6>>, stm32f7xx_hal::gpio::Pin<'C', 12, stm32f7xx_hal::gpio::Alternate<6>>), stm32f7xx_hal::spi::Enabled<u8>>;
     type CS = stm32f7xx_hal::gpio::Pin<'C', 9, stm32f7xx_hal::gpio::Output>;
 
+    #[derive(PartialEq)]
+    enum TestDeviceRf {
+        Transmitter,
+        Receiver,
+    }
+
+    const THIS_TEST_DEVICE_RF: TestDeviceRf = TestDeviceRf::Receiver;
+
     #[shared]
     struct Shared {
         serial: SerialUartUsb,
+        button_signal: bool,
     }
 
     #[local]
@@ -91,7 +100,10 @@ mod app {
         task_rf_test::spawn().ok();
 
         (
-            Shared { serial },
+            Shared {
+                serial,
+                button_signal: false,
+            },
             Local {
                 button,
                 led_green,
@@ -108,6 +120,7 @@ mod app {
             let mut instant = Systick::now();
             instant += 10.millis();
 
+            #[cfg(feature = "task_10ms")]
             let _task_10ms = {
                 // Lock shared "serial" resource. Use it in the critical section
                 ctx.shared.serial.lock(|serial| {
@@ -122,20 +135,67 @@ mod app {
         }
     }
 
-    #[task(priority = 2, local = [cc1101_wrp], shared = [])]
-    async fn task_rf_test(ctx: task_rf_test::Context) {
+    #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, serial])]
+    async fn task_rf_test(mut ctx: task_rf_test::Context) {
+        let mut prev_error = Cc1101WrapperError::TimeoutError;
 
-        ctx.local.cc1101_wrp.configure_radio().unwrap();
+        ctx.local.cc1101_wrp.init_config().unwrap();
         Systick::delay(10.millis().into()).await;
-        ctx.local.cc1101_wrp.sandbox().await.unwrap();
-        Systick::delay(100.millis().into()).await;
 
         loop {
             let _task_rf_test = {
-                // Do nothing
+                let mut signal_received = false;
+                let mut data: [u8; 64] = [0; 64];
+
+                // Lock shared "button_signal" resource. Use it in the critical section
+                ctx.shared.button_signal.lock(|signal| {
+                    signal_received = *signal;
+                    *signal = false;
+                });
+
+                if THIS_TEST_DEVICE_RF == TestDeviceRf::Receiver {
+                    let _ = ctx.local.cc1101_wrp.test_receive_init().await;
+                    Systick::delay(10.millis().into()).await;
+                    let mut length = 0;
+
+                    match ctx.local.cc1101_wrp.test_await_receive(&mut data, &mut length).await {
+                        Ok(_) => {
+                            if length > 0 {
+                                // Lock shared "serial" resource. Use it in the critical section
+                                ctx.shared.serial.lock(|serial| {
+                                    serial.formatln(format_args!(
+                                        "[task_rf_test] Rx ({}): {:02X?}",
+                                        length,
+                                        &data[0..(length as usize)]
+                                    ));
+                                });
+                            }
+                        },
+                        Err(e) => {
+                            if !((e == Cc1101WrapperError::TimeoutError) &&
+                                (prev_error == Cc1101WrapperError::TimeoutError)) {
+
+                                // Lock shared "serial" resource. Use it in the critical section
+                                ctx.shared.serial.lock(|serial| {
+                                    serial.formatln(format_args!("[task_rf_test] Error: {:?}", e));
+                                });
+                            }
+                            prev_error = e;
+                        },
+                    }
+                }
+
+                Systick::delay(10.millis().into()).await;
+
+                if THIS_TEST_DEVICE_RF == TestDeviceRf::Transmitter {
+                    if signal_received {
+                        let _ = ctx.local.cc1101_wrp.test_transmit().await;
+                        Systick::delay(100.millis().into()).await;
+                    }
+                }
             };
 
-            Systick::delay(100.millis().into()).await;
+            Systick::delay(20.millis().into()).await;
         }
     }
 
@@ -150,8 +210,13 @@ mod app {
         }
     }
 
-    #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[])]
-    fn button_pressed(ctx: button_pressed::Context) {
+    #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[button_signal])]
+    fn button_pressed(mut ctx: button_pressed::Context) {
+        // Lock shared "button_signal" resource. Use it in the critical section
+        ctx.shared.button_signal.lock(|signal| {
+            *signal = true;
+        });
+
         // Obtain access to LEDs Peripheral and toggle them
         ctx.local.led_green.toggle();
         ctx.local.led_blue.toggle();

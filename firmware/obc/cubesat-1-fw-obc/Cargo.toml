@@ -10,7 +10,7 @@ publish = false
 
 
 [dependencies]
-# common dependencies
+# Common dependencies
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] } # NOTE: "critical-section-single-core" is critically important for "rtic-monotonics". Similar problem example: https://ferrous-systems.com/blog/defmt-rtt-linker-error/
 cortex-m-rt = "0.7.2"
 cortex-m-semihosting = "0.5.0"
@@ -34,6 +34,10 @@ panic-semihosting = "0.6.0"
 
 
 [features]
+# Elementary features
+task_10ms = []
+
+# Board features
 nucleo-f767zi-board = ["cc1101-wrapper", "nucleo-f767zi", "rtic", "rtic-monotonics", "stm32f7xx-hal"]
 stm32vldiscovery = ["stm32f1xx-hal"]
 
