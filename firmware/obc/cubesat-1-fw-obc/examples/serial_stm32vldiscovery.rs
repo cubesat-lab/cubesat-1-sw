@@ -54,14 +54,14 @@ fn main() -> ! {
                 let data = [0xCA, 0xFE];
                 let frame_len = pack_frame(&data, &mut answer);
                 for i in 0..(frame_len) {
-                    serial.write(answer[i]);
+                    serial.write(answer[i]).unwrap();
                 }
             } else {
                 // Frame was not valid - prepare a message
                 let data = [0xFF, 0xFF];
                 let frame_len = pack_frame(&data, &mut answer);
                 for i in 0..(frame_len) {
-                    serial.write(answer[i]);
+                    serial.write(answer[i]).unwrap();
                 }
             }
         }
