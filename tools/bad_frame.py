@@ -7,7 +7,6 @@ parser.add_argument('-p', '--port', type=str, required=True, help='Serial COM Po
 parser.add_argument('-b', '--baudrate', type=int, default=115200, help='Baudrate')
 args = parser.parse_args()
 
-
 my_serial = help_serial.SerialLink(args.port, args.baudrate)
 my_frame = 'aaaa0002aabbc861'
 byte_data = bytes.fromhex(my_frame)

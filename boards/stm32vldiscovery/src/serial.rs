@@ -1,10 +1,8 @@
 use core::fmt::{Arguments, Write as WriteFmt};
-
 use core::convert::Infallible;
-
 use stm32f1xx_hal::{
     gpio::{Alternate, Pin},
-    pac::{USART1},
+    pac::USART1,
     rcc::Clocks,
     prelude::*,
     serial::{Error, Instance, Rx, Config, Serial, Tx, Pins},
@@ -15,17 +13,15 @@ pub struct SerialUart<UART, const P: char, const N_TX: u8, const N_RX: u8, const
     rx: Rx<UART>,
 }
 
-
 impl<UART: Instance, const P: char, const N_TX: u8, const N_RX: u8, const A: u8>
     SerialUart<UART, P, N_TX, N_RX, A>
 where
     (Pin<P, N_TX, Alternate>, Pin<P, N_RX>): Pins<UART>,
 {
     pub fn new(afio: &mut stm32f1xx_hal::afio::Parts, uart: UART, clocks: &Clocks, pin_tx: Pin<P, N_TX, Alternate>, pin_rx: Pin<P, N_RX>) -> Self {
-
-       
+        // Init UART pins
         let pin_uart_tx = pin_tx;
-        let pin_uart_rx = pin_rx;     
+        let pin_uart_rx = pin_rx;
 
         // Init UART Serial - Default to 115_200 bauds
         let serial = Serial::new(

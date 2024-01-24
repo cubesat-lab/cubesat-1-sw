@@ -2,7 +2,7 @@ use cortex_m_semihosting::{hprintln};
 
 use crc::{Crc, CRC_16_USB};
 
-//Constants
+// Constants
 const FRAME_HEADER_MIN_LENGTH: usize = 6;
 const FRAME_START: u8 = 0xAA;
 const FRAME_FIRST_BYTE : usize= 0;
@@ -21,10 +21,10 @@ pub fn process_incoming_frame(buffer: &mut [u8], buffer_size: &mut usize) -> (bo
     let mut had_complete_frame = false;
 
     // If the buffer has a size which could mean a correct frame
-    if *buffer_size >= FRAME_HEADER_MIN_LENGTH 
+    if *buffer_size >= FRAME_HEADER_MIN_LENGTH
     {
         // Search for the frame start
-        if buffer[FRAME_FIRST_BYTE] == FRAME_START && buffer[FRAME_SECOND_BYTE] == FRAME_START 
+        if buffer[FRAME_FIRST_BYTE] == FRAME_START && buffer[FRAME_SECOND_BYTE] == FRAME_START
         {
             // Extract the two bytes which contain the size of actual message
             let data_len = ((buffer[LENGTH_FIRST_BYTE] as usize) << 8) | buffer[LENGTH_SECOND_BYTE] as usize;
@@ -44,34 +44,34 @@ pub fn process_incoming_frame(buffer: &mut [u8], buffer_size: &mut usize) -> (bo
                 // Calculate the CRC of the crc_data slice
                 let computed_crc = CRC_16.checksum(data_for_crc);
 
-                
+
                 // Check if the computed CRC is the same as the one extracted from the frame
                 //TODO - do something else here
                 if frame_crc == computed_crc
                 {
                     is_frame_valid = true;
-                    hprintln!("Received valid frame:\nLength: {}\nUseful data: {:?}\nCRC: {:04X}\n\n", 
+                    hprintln!("Received valid frame:\nLength: {}\nUseful data: {:?}\nCRC: {:04X}\n\n",
                     data_len, frame_data, frame_crc);
                 }
-                else 
+                else
                 {
                     is_frame_valid = false;
-                    hprintln!("Received invalid frame:\nLength: {}\nUseful data: {:?}\nFRAME CRC: {:04X}\nREAL CRC: {:04X}\n\n", 
+                    hprintln!("Received invalid frame:\nLength: {}\nUseful data: {:?}\nFRAME CRC: {:04X}\nREAL CRC: {:04X}\n\n",
                     data_len, frame_data, frame_crc, computed_crc);
                 }
-                
+
                 had_complete_frame = true;
 
                 // Remove this frame from the buffer
                 *buffer_size = *buffer_size - (FRAME_HEADER_MIN_LENGTH + data_len);
                 buffer.rotate_left(FRAME_HEADER_MIN_LENGTH + data_len);
-            } 
-            else 
+            }
+            else
             {
                 //Nothing
             }
-        } 
-        else 
+        }
+        else
         {
             // Remove first byte to re-align frame search
             *buffer_size = *buffer_size - 1;
@@ -84,9 +84,8 @@ pub fn process_incoming_frame(buffer: &mut [u8], buffer_size: &mut usize) -> (bo
 }
 
 
-pub fn pack_frame(data: &[u8], buffer: &mut [u8; 1024]) -> usize 
+pub fn pack_frame(data: &[u8], buffer: &mut [u8; 1024]) -> usize
 {
-
     let data_len = data.len() as u16;
 
     // Start with two bytes of value 0xAA
