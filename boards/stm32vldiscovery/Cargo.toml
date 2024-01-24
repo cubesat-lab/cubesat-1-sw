@@ -1,0 +1,16 @@
+[package]
+authors = ["Alexandra Buse <alexandra.buse@yahoo.com>"]
+name = "nucleo-stm32vldiscovery"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.2"
+embedded-hal = "0.2.7"
+fugit = "0.3.6"
+nb = "1.0"
+cortex-m-semihosting = "0.5.0"
+stm32f1xx-hal = { version = "0.10.0", features = ["rt", "stm32f100", "medium"]}
