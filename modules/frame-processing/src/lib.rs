@@ -1,4 +1,4 @@
 #![no_std]
 
-/// Board Support Crate
+/// Frame Processing Crate
 pub mod frame;
