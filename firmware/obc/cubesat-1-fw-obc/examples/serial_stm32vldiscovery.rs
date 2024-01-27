@@ -10,7 +10,7 @@ use cortex_m_semihosting::hprintln;
 use cortex_m_rt::entry;
 use frame_processing::{frame::pack_frame, frame::process_incoming_frame};
 use nb::block;
-use nucleo_stm32vldiscovery::serial::SerialUartUsb;
+use nucleo_stm32vldiscovery::serial::{SerialParameters, SerialUartUsb};
 use stm32f1xx_hal::{pac, prelude::*};
 
 use panic_halt as _;
@@ -24,14 +24,20 @@ fn main() -> ! {
     let mut flash = dp.FLASH.constrain();
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-    let mut afio = dp.AFIO.constrain();
-    let mut gpioa = dp.GPIOA.split();
+    let afio = dp.AFIO.constrain();
+    let gpioa = dp.GPIOA.split();
 
-    let pin_tx = gpioa.pa9.into_alternate_push_pull(&mut gpioa.crh);
+    let pin_tx = gpioa.pa9;
     let pin_rx = gpioa.pa10;
+    let crh = gpioa.crh;
+
+    let mut serial_param = SerialParameters {
+        afio: afio,
+        crh: crh,
+    };
 
     // Initialize UART for serial communication through USB
-    let mut serial = SerialUartUsb::new(&mut afio, dp.USART1, &clocks, pin_tx, pin_rx);
+    let mut serial = SerialUartUsb::new(dp.USART1, &clocks, pin_tx, pin_rx, &mut serial_param);
 
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut answer: [u8; 1024] = [0; 1024];
