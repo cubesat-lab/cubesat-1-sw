@@ -24,20 +24,19 @@ fn main() -> ! {
     let mut flash = dp.FLASH.constrain();
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-    let afio = dp.AFIO.constrain();
     let gpioa = dp.GPIOA.split();
 
-    let pin_tx = gpioa.pa9;
-    let pin_rx = gpioa.pa10;
-    let crh = gpioa.crh;
-
-    let mut serial_param = SerialParameters {
-        afio: afio,
-        crh: crh,
+    let serial_parameters = SerialParameters {
+        uart: dp.USART1,
+        clocks: &clocks,
+        pin_tx: gpioa.pa9,
+        pin_rx: gpioa.pa10,
+        afio: dp.AFIO.constrain(),
+        crh: gpioa.crh,
     };
 
     // Initialize UART for serial communication through USB
-    let mut serial = SerialUartUsb::new(dp.USART1, &clocks, pin_tx, pin_rx, &mut serial_param);
+    let mut serial = SerialUartUsb::new(serial_parameters);
 
     let mut buffer: [u8; 1024] = [0; 1024];
     let mut answer: [u8; 1024] = [0; 1024];

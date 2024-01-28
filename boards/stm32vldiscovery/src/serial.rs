@@ -1,19 +1,24 @@
 use core::convert::Infallible;
 use core::fmt::{Arguments, Write as WriteFmt};
-use stm32f1xx_hal::gpio::HL;
 use stm32f1xx_hal::{
-    gpio::{Alternate, Pin},
+    afio::Parts,
+    gpio::{Alternate, Pin, HL},
     pac::USART1,
     prelude::*,
     rcc::Clocks,
     serial::{Config, Error, Instance, Pins, Rx, Serial, Tx},
 };
 
-pub struct SerialParameters<const P: char, const N_TX: u8>
+pub struct SerialParameters<'a, UART, const P: char, const N_TX: u8, const N_RX: u8>
 where
     Pin<P, N_TX>: HL,
+    Pin<P, N_RX>: HL,
 {
-    pub afio: stm32f1xx_hal::afio::Parts,
+    pub uart: UART,
+    pub clocks: &'a Clocks,
+    pub pin_tx: Pin<P, N_TX>,
+    pub pin_rx: Pin<P, N_RX>,
+    pub afio: Parts,
     pub crh: <Pin<P, N_TX> as HL>::Cr,
 }
 
@@ -29,27 +34,23 @@ where
     Pin<P, N_TX>: HL,
     Pin<P, N_RX>: HL,
 {
-    pub fn new(
-        uart: UART,
-        clocks: &Clocks,
-        pin_tx: Pin<P, N_TX>,
-        pin_rx: Pin<P, N_RX>,
-        optional_parameter: &mut SerialParameters<P, N_TX>,
-    ) -> Self {
+    pub fn new(mut serial_parameters: SerialParameters<UART, P, N_TX, N_RX>) -> Self {
         // Init UART pins
-        let pin_uart_tx = pin_tx.into_alternate_push_pull(&mut optional_parameter.crh);
-        let pin_uart_rx = pin_rx;
+        let pin_uart_tx = serial_parameters
+            .pin_tx
+            .into_alternate_push_pull(&mut serial_parameters.crh);
+        let pin_uart_rx = serial_parameters.pin_rx;
 
         // Init UART Serial - Default to 115_200 bauds
         let serial = Serial::new(
-            uart,
+            serial_parameters.uart,
             (pin_uart_tx, pin_uart_rx),
-            &mut optional_parameter.afio.mapr,
+            &mut serial_parameters.afio.mapr,
             Config::default()
                 .baudrate(115200.bps())
                 .wordlength_9bits()
                 .parity_none(),
-            &clocks,
+            serial_parameters.clocks,
         );
 
         let (tx, rx) = serial.split();
