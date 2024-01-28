@@ -1,13 +1,17 @@
 use embedded_hal::digital::v2::PinState;
 use stm32f7xx_hal::gpio::{Output, Pin};
 
+pub struct LedParameters<const P: char, const N: u8> {
+    pub pin: Pin<P, N>,
+}
+
 pub struct Led<const P: char, const N: u8> {
     led: Pin<P, N, Output>,
 }
 
 impl<const P: char, const N: u8> Led<P, N> {
-    pub fn new(pin: Pin<P, N>) -> Self {
-        let led = pin.into_push_pull_output();
+    pub fn new(led_parameters: LedParameters<P, N>) -> Self {
+        let led = led_parameters.pin.into_push_pull_output();
         Self { led }
     }
 

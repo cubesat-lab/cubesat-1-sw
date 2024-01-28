@@ -18,8 +18,8 @@ where
     pub clocks: &'a Clocks,
     pub pin_tx: Pin<P, N_TX>,
     pub pin_rx: Pin<P, N_RX>,
-    pub afio: Parts,
-    pub crh: <Pin<P, N_TX> as HL>::Cr,
+    pub afio: &'a mut Parts,
+    pub cr: &'a mut <Pin<P, N_TX> as HL>::Cr,
 }
 
 pub struct SerialUart<UART, const P: char, const N_TX: u8, const N_RX: u8, const A: u8> {
@@ -34,11 +34,11 @@ where
     Pin<P, N_TX>: HL,
     Pin<P, N_RX>: HL,
 {
-    pub fn new(mut serial_parameters: SerialParameters<UART, P, N_TX, N_RX>) -> Self {
+    pub fn new(serial_parameters: SerialParameters<UART, P, N_TX, N_RX>) -> Self {
         // Init UART pins
         let pin_uart_tx = serial_parameters
             .pin_tx
-            .into_alternate_push_pull(&mut serial_parameters.crh);
+            .into_alternate_push_pull(serial_parameters.cr);
         let pin_uart_rx = serial_parameters.pin_rx;
 
         // Init UART Serial - Default to 115_200 bauds

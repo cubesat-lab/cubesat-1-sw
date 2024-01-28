@@ -7,6 +7,13 @@ use stm32f7xx_hal::{
     serial::{self, Error, Instance, PinRx, PinTx, Rx, Serial, Tx},
 };
 
+pub struct SerialParameters<'a, UART, const P: char, const N_TX: u8, const N_RX: u8, const A: u8> {
+    pub uart: UART,
+    pub clocks: &'a Clocks,
+    pub pin_tx: Pin<P, N_TX>,
+    pub pin_rx: Pin<P, N_RX>,
+}
+
 pub struct SerialUart<UART, const P: char, const N_TX: u8, const N_RX: u8, const A: u8> {
     tx: Tx<UART>,
     rx: Rx<UART>,
@@ -18,16 +25,16 @@ where
     Pin<P, N_TX, Alternate<A>>: PinTx<UART>,
     Pin<P, N_RX, Alternate<A>>: PinRx<UART>,
 {
-    pub fn new(uart: UART, clocks: &Clocks, pin_tx: Pin<P, N_TX>, pin_rx: Pin<P, N_RX>) -> Self {
+    pub fn new(serial_parameters: SerialParameters<UART, P, N_TX, N_RX, A>) -> Self {
         // Init UART pins
-        let pin_uart_tx: Pin<P, N_TX, Alternate<A>> = pin_tx.into_alternate();
-        let pin_uart_rx: Pin<P, N_RX, Alternate<A>> = pin_rx.into_alternate();
+        let pin_uart_tx: Pin<P, N_TX, Alternate<A>> = serial_parameters.pin_tx.into_alternate();
+        let pin_uart_rx: Pin<P, N_RX, Alternate<A>> = serial_parameters.pin_rx.into_alternate();
 
         // Init UART Serial - Default to 115_200 bauds
         let serial = Serial::new(
-            uart,
+            serial_parameters.uart,
             (pin_uart_tx, pin_uart_rx),
-            clocks,
+            serial_parameters.clocks,
             serial::Config {
                 ..Default::default()
             },

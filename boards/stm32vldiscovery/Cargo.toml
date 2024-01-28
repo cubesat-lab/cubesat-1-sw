@@ -1,6 +1,6 @@
 [package]
 authors = ["Alexandra Buse <alexandra.buse@yahoo.com>"]
-name = "nucleo-stm32vldiscovery"
+name = "stm32vldiscovery"
 version = "0.1.0"
 edition = "2021"
 

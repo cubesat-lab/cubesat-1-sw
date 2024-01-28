@@ -3,7 +3,7 @@
 #![feature(type_alias_impl_trait)]
 
 use fugit::HertzU32;
-use nucleo_f767zi::serial::SerialUartUsb;
+use nucleo_f767zi::serial::{SerialParameters, SerialUartUsb};
 use panic_halt as _;
 use rtic::app;
 use rtic_monotonics::systick::Systick;
@@ -42,7 +42,13 @@ mod app {
         Systick::start(cp.SYST, (216.MHz() as HertzU32).to_Hz(), systick_token);
 
         // Initialize UART for serial communication through USB
-        let mut serial = SerialUartUsb::new(dp.USART3, &clocks, gpiod.pd8, gpiod.pd9);
+        let serial_parameters = SerialParameters {
+            uart: dp.USART3,
+            clocks: &clocks,
+            pin_tx: gpiod.pd8,
+            pin_rx: gpiod.pd9,
+        };
+        let mut serial = SerialUartUsb::new(serial_parameters);
         serial.println("Hello RTIC!");
 
         // Spawn tasks

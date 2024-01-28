@@ -5,7 +5,11 @@ use core::str::from_utf8;
 use cortex_m::{delay::Delay, peripheral::Peripherals as CortexMPeripherals};
 use cortex_m_rt::entry;
 use cortex_m_semihosting::hprintln;
-use nucleo_f767zi::{serial::SerialUartUsb, temp::TemperatureSensor, uid::McuUid};
+use nucleo_f767zi::{
+    serial::{SerialParameters, SerialUartUsb},
+    temp::TemperatureSensor,
+    uid::McuUid,
+};
 use panic_halt as _;
 use stm32f7xx_hal::{pac::Peripherals as Stm32F7Peripherals, prelude::*};
 
@@ -35,7 +39,13 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, 216.MHz::<1, 1>().raw());
 
     // Initialize UART for serial communication through USB
-    let mut serial = SerialUartUsb::new(pac.USART3, &clocks, gpiod.pd8, gpiod.pd9);
+    let serial_parameters = SerialParameters {
+        uart: pac.USART3,
+        clocks: &clocks,
+        pin_tx: gpiod.pd8,
+        pin_rx: gpiod.pd9,
+    };
+    let mut serial = SerialUartUsb::new(serial_parameters);
 
     // Initialize Temperature Sensor
     let mut temp_sensor = TemperatureSensor::new(pac.ADC_COMMON, pac.ADC1, &mut rcc.apb2, &clocks);
