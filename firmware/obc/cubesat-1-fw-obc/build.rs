@@ -58,13 +58,13 @@ impl Board {
     fn read() -> Self {
         if cfg!(feature = "nucleo-f767zi-board") {
             Board::NucleoF767zi
-        } else if cfg!(feature = "stm32vldiscovery") {
+        } else if cfg!(feature = "stm32vldiscovery-board") {
             Board::Stm32vldiscovery
         } else {
             error("
 ERROR: You must select a target board (--features option), see examples below:
     `cargo build --features nucleo-f767zi-board`
-    `cargo build --target thumbv7m-none-eabi --features stm32vldiscovery --example hello_stm32vldiscovery`
+    `cargo build --target thumbv7m-none-eabi --features stm32vldiscovery-board --example hello_stm32vldiscovery`
 ");
         }
     }

@@ -1,17 +1,25 @@
+use core::convert::Infallible;
 use core::fmt::{Arguments, Write as WriteFmt};
-use embedded_hal::serial::{Read, Write};
-use stm32f7xx_hal::{
-    gpio::{Alternate, Pin},
-    pac::USART3,
+use stm32f1xx_hal::{
+    afio::Parts,
+    gpio::{Alternate, Pin, HL},
+    pac::USART1,
+    prelude::*,
     rcc::Clocks,
-    serial::{self, Error, Instance, PinRx, PinTx, Rx, Serial, Tx},
+    serial::{Config, Error, Instance, Pins, Rx, Serial, Tx},
 };
 
-pub struct SerialParameters<'a, UART, const P: char, const N_TX: u8, const N_RX: u8, const A: u8> {
+pub struct SerialParameters<'a, UART, const P: char, const N_TX: u8, const N_RX: u8>
+where
+    Pin<P, N_TX>: HL,
+    Pin<P, N_RX>: HL,
+{
     pub uart: UART,
     pub clocks: &'a Clocks,
     pub pin_tx: Pin<P, N_TX>,
     pub pin_rx: Pin<P, N_RX>,
+    pub afio: &'a mut Parts,
+    pub cr: &'a mut <Pin<P, N_TX> as HL>::Cr,
 }
 
 pub struct SerialUart<UART, const P: char, const N_TX: u8, const N_RX: u8, const A: u8> {
@@ -22,22 +30,27 @@ pub struct SerialUart<UART, const P: char, const N_TX: u8, const N_RX: u8, const
 impl<UART: Instance, const P: char, const N_TX: u8, const N_RX: u8, const A: u8>
     SerialUart<UART, P, N_TX, N_RX, A>
 where
-    Pin<P, N_TX, Alternate<A>>: PinTx<UART>,
-    Pin<P, N_RX, Alternate<A>>: PinRx<UART>,
+    (Pin<P, N_TX, Alternate>, Pin<P, N_RX>): Pins<UART>,
+    Pin<P, N_TX>: HL,
+    Pin<P, N_RX>: HL,
 {
-    pub fn new(serial_parameters: SerialParameters<UART, P, N_TX, N_RX, A>) -> Self {
+    pub fn new(serial_parameters: SerialParameters<UART, P, N_TX, N_RX>) -> Self {
         // Init UART pins
-        let pin_uart_tx: Pin<P, N_TX, Alternate<A>> = serial_parameters.pin_tx.into_alternate();
-        let pin_uart_rx: Pin<P, N_RX, Alternate<A>> = serial_parameters.pin_rx.into_alternate();
+        let pin_uart_tx = serial_parameters
+            .pin_tx
+            .into_alternate_push_pull(serial_parameters.cr);
+        let pin_uart_rx = serial_parameters.pin_rx;
 
         // Init UART Serial - Default to 115_200 bauds
         let serial = Serial::new(
             serial_parameters.uart,
             (pin_uart_tx, pin_uart_rx),
+            &mut serial_parameters.afio.mapr,
+            Config::default()
+                .baudrate(115200.bps())
+                .wordlength_9bits()
+                .parity_none(),
             serial_parameters.clocks,
-            serial::Config {
-                ..Default::default()
-            },
         );
 
         let (tx, rx) = serial.split();
@@ -49,7 +62,7 @@ where
         self.rx.read()
     }
 
-    pub fn write(&mut self, byte: u8) -> nb::Result<(), Error> {
+    pub fn write(&mut self, byte: u8) -> nb::Result<(), Infallible> {
         self.tx.write(byte)
     }
 
@@ -63,4 +76,4 @@ where
     }
 }
 
-pub type SerialUartUsb = SerialUart<USART3, 'D', 8, 9, 7>;
+pub type SerialUartUsb = SerialUart<USART1, 'A', 9, 10, 7>;

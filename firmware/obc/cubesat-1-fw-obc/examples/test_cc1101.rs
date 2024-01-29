@@ -6,8 +6,8 @@ use cortex_m::{delay::Delay, peripheral::Peripherals as CortexMPeripherals};
 use cortex_m_rt::entry;
 use cortex_m_semihosting::hprintln;
 use nucleo_f767zi::{
-    led::{LedBlue, LedGreen, LedRed},
-    serial::SerialUartUsb,
+    led::{LedBlue, LedGreen, LedParameters, LedRed},
+    serial::{SerialParameters, SerialUartUsb},
     spi::{SpiMaster3, SpiMaster4},
 };
 use panic_halt as _;
@@ -42,12 +42,18 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, 216.MHz::<1, 1>().raw());
 
     // Initialize LEDs
-    let mut led_green = LedGreen::new(gpiob.pb0);
-    let mut led_blue = LedBlue::new(gpiob.pb7);
-    let mut led_red = LedRed::new(gpiob.pb14);
+    let mut led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
+    let mut led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
+    let mut led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
 
     // Initialize UART for serial communication through USB
-    let mut serial = SerialUartUsb::new(pac.USART3, &clocks, gpiod.pd8, gpiod.pd9);
+    let serial_parameters = SerialParameters {
+        uart: pac.USART3,
+        clocks: &clocks,
+        pin_tx: gpiod.pd8,
+        pin_rx: gpiod.pd9,
+    };
+    let mut serial = SerialUartUsb::new(serial_parameters);
 
     // Initialize SPI3
     let spi_3 = SpiMaster3::new(

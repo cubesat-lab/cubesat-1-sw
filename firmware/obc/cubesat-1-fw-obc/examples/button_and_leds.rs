@@ -10,8 +10,8 @@ use cortex_m::{
 };
 use cortex_m_rt::entry;
 use nucleo_f767zi::{
-    button::Button,
-    led::{LedBlue, LedGreen, LedRed},
+    button::{Button, ButtonParameters},
+    led::{LedBlue, LedGreen, LedParameters, LedRed},
 };
 use panic_halt as _;
 use stm32f7xx_hal::{
@@ -53,15 +53,20 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, 216.MHz::<1, 1>().raw());
 
     // Initialize LEDs
-    let mut led_green = LedGreen::new(gpiob.pb0);
-    let mut led_blue = LedBlue::new(gpiob.pb7);
-    let mut led_red = LedRed::new(gpiob.pb14);
+    let mut led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
+    let mut led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
+    let mut led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
 
     // Initialize User Button
     let mut syscfg = pac.SYSCFG;
     let mut exti = pac.EXTI;
-    let mut button = Button::new(gpioc.pc13);
-    button.enable_interrupt(Edge::Rising, &mut syscfg, &mut exti, &mut rcc.apb2);
+    let button = Button::new(ButtonParameters {
+        pin: gpioc.pc13,
+        edge: Edge::Rising,
+        syscfg: &mut syscfg,
+        exti: &mut exti,
+        apb: &mut rcc.apb2,
+    });
 
     // Save information needed by the interrupt handler to the global variable
     free(|cs| {

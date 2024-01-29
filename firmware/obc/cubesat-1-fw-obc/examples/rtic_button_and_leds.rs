@@ -4,9 +4,9 @@
 
 use fugit::HertzU32;
 use nucleo_f767zi::{
-    button::Button,
-    led::{LedBlue, LedGreen, LedRed},
-    serial::SerialUartUsb,
+    button::{Button, ButtonParameters},
+    led::{LedBlue, LedGreen, LedParameters, LedRed},
+    serial::{SerialParameters, SerialUartUsb},
 };
 use panic_halt as _;
 use rtic::app;
@@ -62,9 +62,9 @@ mod app {
         Systick::start(cp.SYST, (216.MHz() as HertzU32).to_Hz(), systick_token);
 
         // Initialize LEDs
-        let mut led_green = LedGreen::new(gpiob.pb0);
-        let mut led_blue = LedBlue::new(gpiob.pb7);
-        let mut led_red = LedRed::new(gpiob.pb14);
+        let mut led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
+        let mut led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
+        let mut led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
 
         // Initialize Led state
         let led_state = LedState::Red;
@@ -73,14 +73,25 @@ mod app {
         led_red.set_state(PinState::High);
 
         // Initialize UART for serial communication through USB
-        let mut serial = SerialUartUsb::new(dp.USART3, &clocks, gpiod.pd8, gpiod.pd9);
+        let serial_parameters = SerialParameters {
+            uart: dp.USART3,
+            clocks: &clocks,
+            pin_tx: gpiod.pd8,
+            pin_rx: gpiod.pd9,
+        };
+        let mut serial = SerialUartUsb::new(serial_parameters);
         serial.println("Hello RTIC!");
 
         // Initialize User Button
         let mut syscfg = dp.SYSCFG;
         let mut exti = dp.EXTI;
-        let mut button = Button::new(gpioc.pc13);
-        button.enable_interrupt(Edge::Rising, &mut syscfg, &mut exti, &mut rcc.apb2);
+        let button = Button::new(ButtonParameters {
+            pin: gpioc.pc13,
+            edge: Edge::Rising,
+            syscfg: &mut syscfg,
+            exti: &mut exti,
+            apb: &mut rcc.apb2,
+        });
 
         (
             Shared { serial },
