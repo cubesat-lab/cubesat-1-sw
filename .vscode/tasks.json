@@ -110,7 +110,7 @@
             "description": "Which Board?",
             "options": [
                 {"label": "NUCLEO-F767ZI", "value": "nucleo-f767zi-board"},
-                {"label": "STM32VLDISCOVERY", "value": "stm32vldiscovery"},
+                {"label": "STM32VLDISCOVERY", "value": "stm32vldiscovery-board"},
             ],
             "default": "nucleo-f767zi-board"
         },
