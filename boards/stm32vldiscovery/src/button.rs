@@ -1,27 +1,29 @@
-use stm32f7xx_hal::{
-    gpio::{Edge, ExtiPin, Input, Pin},
-    pac::{EXTI, SYSCFG},
-    rcc::APB2,
+use stm32f1xx_hal::{
+    afio::Parts,
+    gpio::{Edge, ExtiPin, Input, Pin, PullDown, HL},
+    pac::EXTI,
 };
 
 pub struct ButtonParameters<'a> {
-    pub pin: Pin<'C', 13>,
+    pub pin: Pin<'A', 0>,
     pub edge: Edge,
-    pub syscfg: &'a mut SYSCFG,
     pub exti: &'a mut EXTI,
-    pub apb: &'a mut APB2,
+    pub afio: &'a mut Parts,
+    pub cr: &'a mut <Pin<'A', 0> as HL>::Cr,
 }
 
 pub struct Button {
-    btn: Pin<'C', 13, Input>,
+    btn: Pin<'A', 0, Input<PullDown>>,
 }
 
 impl Button {
     pub fn new(button_parameters: ButtonParameters) -> Self {
-        let mut button = button_parameters.pin.into_floating_input();
+        let mut button = button_parameters
+            .pin
+            .into_pull_down_input(button_parameters.cr);
 
-        // Enable external interrupt on PC13
-        button.make_interrupt_source(button_parameters.syscfg, button_parameters.apb);
+        // Enable external interrupt on PA0
+        button.make_interrupt_source(button_parameters.afio);
         button.trigger_on_edge(button_parameters.exti, button_parameters.edge);
         button.enable_interrupt(button_parameters.exti);
 
