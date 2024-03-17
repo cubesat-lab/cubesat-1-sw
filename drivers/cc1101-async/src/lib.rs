@@ -11,6 +11,7 @@ pub use cc1101::{
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;
 
+use fugit::Duration;
 use rtic_monotonics::systick::Systick;
 
 
@@ -141,20 +142,28 @@ where
         let delay = fugit::ExtU64::micros(1000);
         loop {
             let machine_state = self.read_machine_state()?;
+
             if machine_state == target_state {
-                break
+                /* Successful scenario */
+                return Ok(());
+            }
+
+            /* Error scenarios */
+            if machine_state == MachineState::RXFIFO_OVERFLOW {
+                return Err(Cc1101AsyncError::RxOverflow);
+            } else if machine_state == MachineState::RXFIFO_OVERFLOW {
+                return Err(Cc1101AsyncError::TxUnderflow);
+            } else {
+                /* Ignore other states */
             }
 
             Systick::delay(delay).await;
         }
-        Ok(())
     }
 
-    pub async fn await_machine_state(&mut self, target_state: MachineState) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
-        let timeout = fugit::ExtU64::millis(10);
-
+    pub async fn await_machine_state(&mut self, target_state: MachineState, timeout: Duration<u64, 1, 1000>) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
         match Systick::timeout_after(timeout, self.check_machine_state(target_state)).await {
-            Ok(_) => Ok(()),
+            Ok(result) => result,
             Err(_) => Err(Cc1101AsyncError::TimeoutError),
         }
     }
@@ -168,11 +177,11 @@ where
     }
 
     /// Set Radio Mode.
-    pub async fn set_radio_mode(&mut self, radio_mode: RadioMode) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
+    pub async fn set_radio_mode(&mut self, radio_mode: RadioMode, timeout: Duration<u64, 1, 1000>) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
 
         // Set "Idle" mode before going into any other mode
         self.command(CommandStrobe::ExitRxTx)?;
-        self.await_machine_state(MachineState::IDLE).await?;
+        self.await_machine_state(MachineState::IDLE, timeout).await?;
 
         match radio_mode {
             RadioMode::Idle => {
@@ -183,15 +192,15 @@ where
             }
             RadioMode::Calibrate => {
                 self.command(CommandStrobe::CalFreqSynthAndTurnOff)?;
-                self.await_machine_state(MachineState::MANCAL).await?;
+                self.await_machine_state(MachineState::MANCAL, timeout).await?;
             }
             RadioMode::Transmit => {
                 self.command(CommandStrobe::EnableTx)?;
-                self.await_machine_state(MachineState::TX).await?;
+                self.await_machine_state(MachineState::TX, timeout).await?;
             }
             RadioMode::Receive => {
                 self.command(CommandStrobe::EnableRx)?;
-                self.await_machine_state(MachineState::RX).await?;
+                self.await_machine_state(MachineState::RX, timeout).await?;
             }
         };
         Ok(())

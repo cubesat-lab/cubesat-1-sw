@@ -118,7 +118,7 @@ mod nucleo_f767zi_board {
 
             // Spawn tasks
             task_10ms::spawn().ok();
-            task_rf_test::spawn().ok();
+            task_rf_com::spawn().ok();
 
             // Return
             (
@@ -158,16 +158,18 @@ mod nucleo_f767zi_board {
         }
 
         #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, serial])]
-        async fn task_rf_test(mut ctx: task_rf_test::Context) {
-            let mut prev_error = Cc1101WrapperError::TimeoutError;
-
+        async fn task_rf_com(mut ctx: task_rf_com::Context) {
             ctx.local.cc1101_wrp.init_config().unwrap();
             Systick::delay(10.millis().into()).await;
 
             loop {
-                let _task_rf_test = {
+                let _task_rf_com = {
                     let mut signal_received = false;
-                    let mut data: [u8; 64] = [0; 64];
+                    let mut data_rx: [u8; 64] = [0; 64];
+                    let mut data_tx: [u8; 16] = [0xAA; 16];
+                    data_tx[0] = 10;
+                    data_tx[1] = 10;
+                    let mut length = 0;
 
                     // Lock shared "button_signal" resource. Use it in the critical section
                     ctx.shared.button_signal.lock(|signal| {
@@ -175,57 +177,46 @@ mod nucleo_f767zi_board {
                         *signal = false;
                     });
 
-                    if THIS_TEST_DEVICE_RF == TestDeviceRf::Receiver {
-                        let _ = ctx.local.cc1101_wrp.test_receive_init().await;
-                        Systick::delay(10.millis().into()).await;
-                        let mut length = 0;
+                    // Test Code: Generate Tx data
+                    if signal_received {
+                        let _ = ctx.local.cc1101_wrp.write_data(&mut data_tx);
+                    }
 
-                        match ctx
-                            .local
+                    // Process RF
+                    ctx.local.cc1101_wrp.main().await;
+
+                    if ctx.local.cc1101_wrp.is_data_received() {
+                        ctx.local
                             .cc1101_wrp
-                            .test_await_receive(&mut data, &mut length)
-                            .await
-                        {
-                            Ok(_) => {
-                                if length > 0 {
-                                    // Lock shared "serial" resource. Use it in the critical section
-                                    ctx.shared.serial.lock(|serial| {
-                                        serial.formatln(format_args!(
-                                            "[task_rf_test] Rx ({}): {:02X?}",
-                                            length,
-                                            &data[0..(length as usize)]
-                                        ));
-                                    });
-                                }
-                            }
-                            Err(e) => {
-                                if !((e == Cc1101WrapperError::TimeoutError)
-                                    && (prev_error == Cc1101WrapperError::TimeoutError))
-                                {
-                                    // Lock shared "serial" resource. Use it in the critical section
-                                    ctx.shared.serial.lock(|serial| {
-                                        serial.formatln(format_args!(
-                                            "[task_rf_test] Error: {:?}",
-                                            e
-                                        ));
-                                    });
-                                }
-                                prev_error = e;
-                            }
-                        }
+                            .read_data(&mut data_rx, &mut length)
+                            .unwrap();
+
+                        // Test Code: Consume Rx data
+                        // Lock shared "serial" resource. Use it in the critical section
+                        ctx.shared.serial.lock(|serial| {
+                            serial.formatln(format_args!(
+                                "[task_rf_com] Rx ({}): {:02X?}",
+                                length,
+                                &data_rx[0..(length as usize)]
+                            ));
+                        });
                     }
 
+                    // Test Code: Consume last error
+                    let (error_option, error_count) = ctx.local.cc1101_wrp.read_last_error();
+                    if let Some(error) = error_option {
+                        // Lock shared "serial" resource. Use it in the critical section
+                        ctx.shared.serial.lock(|serial| {
+                            serial.formatln(format_args!(
+                                "[task_rf_com] Error: {:?}, {}",
+                                error, error_count
+                            ));
+                        });
+                    }
+
+                    // Test Code: Simulate other activity
                     Systick::delay(10.millis().into()).await;
-
-                    if THIS_TEST_DEVICE_RF == TestDeviceRf::Transmitter {
-                        if signal_received {
-                            let _ = ctx.local.cc1101_wrp.test_transmit().await;
-                            Systick::delay(100.millis().into()).await;
-                        }
-                    }
                 };
-
-                Systick::delay(20.millis().into()).await;
             }
         }
 
