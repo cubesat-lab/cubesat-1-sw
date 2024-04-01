@@ -125,6 +125,20 @@ Design, Development, Testing, Debugging, etc.
         ```bash
         brew install open-ocd
         ```
+- RobotFramework (tests currently working just on Linux)
+    - Install
+        ```bash
+        pip install robotframework
+        ```
+    - Run
+        ```bash
+        robot [path_to_test_suite]
+        ```
+    - Run and save results to a specific directory
+        ```bash
+        robot --outputdir [path_to_output_dir] [path_to_test_suite]
+        ```
+
 <!-- - QEMU
     - TBD -->
 

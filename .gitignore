@@ -5,3 +5,12 @@
 # Structurizr generated files
 docs/.structurizr
 docs/workspace.json
+
+# Robot Framework result files
+**/log.html
+**/output.xml
+**/report.html
+
+# Robot Framework test files
+**/qemu_error.txt
+**/qemu_output.txt
