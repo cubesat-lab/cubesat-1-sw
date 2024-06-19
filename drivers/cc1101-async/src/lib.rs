@@ -126,6 +126,10 @@ where
         Ok(self.cc1101.set_packet_length(length)?)
     }
 
+    pub fn white_data(&mut self, enable: bool) -> Result<(), Cc1101AsyncError<SpiE, GpioE>> {
+        Ok(self.cc1101.white_data(enable)?)
+    }
+
     pub fn read_tx_bytes(&mut self) -> Result<u8, Cc1101AsyncError<SpiE, GpioE>> {
         Ok(self.cc1101.read_tx_bytes()?)
     }

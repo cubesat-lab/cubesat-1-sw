@@ -15,12 +15,13 @@ const PACKET_LENGTH_BYTES: u8 = 64;
 // Project specific radio configurations
 const FREQUENCY: u64 = 433_000_000; // 433 MHz
 const MODULATION: Modulation = Modulation::BinaryFrequencyShiftKeying;
-const SYNC_MODE: SyncMode = SyncMode::MatchFull(0xA503);
+const SYNC_MODE: SyncMode = SyncMode::MatchFull(0xCAFE);
 // const PACKET_LENGTH: PacketLength = PacketLength::Fixed(PACKET_LENGTH_BYTES);
 const PACKET_LENGTH: PacketLength = PacketLength::Variable(PACKET_LENGTH_BYTES);
 const NUM_PREAMBLE_BYTES: NumPreambleBytes = NumPreambleBytes::Four;
 const CCA_MODE: CcaMode = CcaMode::AlwaysClear;
 const CRC_ENABLE: bool = false;
+const WHITE_DATA: bool = false;
 // const ADDRESS_FILTER: AddressFilter = AddressFilter::Device(10);
 // const ADDRESS_FILTER: AddressFilter = AddressFilter::DeviceLowBroadcast(1);
 const ADDRESS_FILTER: AddressFilter = AddressFilter::Disabled;
@@ -136,6 +137,7 @@ where
         self.cc1101.set_deviation(DEVIATION)?;
         self.cc1101.set_data_rate(DATARATE)?;
         self.cc1101.set_chanbw(BANDWIDTH)?;
+        self.cc1101.white_data(WHITE_DATA)?;
 
         Ok(())
     }
@@ -152,12 +154,6 @@ where
         let result = self.cc1101.read_machine_state();
         let _ = self.process_result(result);
 
-        // Flush FIFO RX
-        let result = self.cc1101.command(CommandStrobe::FlushRxFifoBuffer);
-        self.process_result(result);
-        let result = self.cc1101.read_machine_state();
-        let _ = self.process_result(result);
-
         // Calibrate
         let result = self.cc1101.set_radio_mode(RadioMode::Calibrate, timeout).await;
         self.process_result(result);
@@ -165,6 +161,12 @@ where
         self.process_result(result);
 
         // Systick::delay(10.millis().into()).await;
+
+        // Flush FIFO RX
+        let result = self.cc1101.command(CommandStrobe::FlushRxFifoBuffer);
+        self.process_result(result);
+        let result = self.cc1101.read_machine_state();
+        let _ = self.process_result(result);
 
         // Start Rx
         let result = self.cc1101.set_radio_mode(RadioMode::Receive, timeout).await;
@@ -197,17 +199,17 @@ where
             let result = self.cc1101.read_machine_state();
             let _ = self.process_result(result);
 
-            // Flush FIFO Tx
-            let result = self.cc1101.command(CommandStrobe::FlushTxFifoBuffer);
-            self.process_result(result);
-            let result = self.cc1101.read_machine_state();
-            let _ = self.process_result(result);
-
             // Calibrate
             let result = self.cc1101.set_radio_mode(RadioMode::Calibrate, timeout).await;
             self.process_result(result);
             let result = self.cc1101.await_machine_state(MachineState::IDLE, timeout).await;
             self.process_result(result);
+
+            // Flush FIFO Tx
+            let result = self.cc1101.command(CommandStrobe::FlushTxFifoBuffer);
+            self.process_result(result);
+            let result = self.cc1101.read_machine_state();
+            let _ = self.process_result(result);
 
             // Write data
             let result = self.cc1101.write_data(&mut self.tx_data.data[..(self.tx_data.length as usize)]);
@@ -218,7 +220,7 @@ where
             // Start Tx
             let result = self.cc1101.set_radio_mode(RadioMode::Transmit, timeout).await;
             self.process_result(result);
-            Systick::delay(fugit::ExtU64::micros(5000)).await;
+            Systick::delay(fugit::ExtU64::millis(5)).await;
 
             // Wait for Tx to finish and get the result
             let result = self.cc1101.await_machine_state(MachineState::IDLE, timeout).await;
@@ -306,7 +308,9 @@ where
                     }
                     last_rxbytes = num_rxbytes;
                     if last_rxbytes > FIFO_MAX_SIZE {
-                        rx_state = RxState::Error;
+                        // TODO: Check how to treat this case in a reliable way
+                        last_rxbytes = FIFO_MAX_SIZE;
+                        // rx_state = RxState::Error;
                     }
                 }
                 RxState::Received => {
