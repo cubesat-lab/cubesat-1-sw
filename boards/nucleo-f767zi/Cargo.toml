@@ -13,3 +13,7 @@ embedded-hal = "0.2.7"
 fugit = "0.3.7"
 nb = "1.0"
 stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"] }
+
+[dependencies.embedded-hal-1]
+package = "embedded-hal"
+version = "1.0"

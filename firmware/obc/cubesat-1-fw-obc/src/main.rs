@@ -10,12 +10,13 @@ use rtic_monotonics::{systick::Systick, Monotonic};
 #[cfg(feature = "nucleo-f767zi-board")]
 mod nucleo_f767zi_board {
     use super::*;
-    use cc1101_wrapper::{Cc1101Wrapper, Cc1101WrapperError};
+    use cc1101_wrapper::Cc1101Wrapper;
     use nucleo_f767zi::{
         button::{Button, ButtonParameters},
         led::{LedBlue, LedGreen, LedParameters, LedRed},
         serial::{SerialParameters, SerialUartUsb},
         spi::SpiMaster3,
+        spi_adapter::SpiAdapter,
     };
     use stm32f7xx_hal::{gpio::Edge, pac, prelude::*};
 
@@ -33,14 +34,7 @@ mod nucleo_f767zi_board {
             stm32f7xx_hal::spi::Enabled<u8>,
         >;
         type CS = stm32f7xx_hal::gpio::Pin<'C', 9, stm32f7xx_hal::gpio::Output>;
-
-        #[derive(PartialEq)]
-        enum TestDeviceRf {
-            Transmitter,
-            Receiver,
-        }
-
-        const THIS_TEST_DEVICE_RF: TestDeviceRf = TestDeviceRf::Receiver;
+        type Cc1101SpiAdapter = SpiAdapter<SPI, CS>;
 
         #[shared]
         struct Shared {
@@ -54,7 +48,7 @@ mod nucleo_f767zi_board {
             led_green: LedGreen,
             led_blue: LedBlue,
             led_red: LedRed,
-            cc1101_wrp: Cc1101Wrapper<SPI, CS>,
+            cc1101_wrp: Cc1101Wrapper<Cc1101SpiAdapter>,
         }
 
         #[init]
@@ -114,7 +108,7 @@ mod nucleo_f767zi_board {
             });
 
             // Initialize CC1101 Wrapper - RF Transceiver
-            let cc1101_wrp = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
+            let cc1101_wrp = Cc1101Wrapper::new(SpiAdapter::new(spi_3.spi, spi_3.cs));
 
             // Spawn tasks
             task_10ms::spawn().ok();

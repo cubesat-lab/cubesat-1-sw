@@ -4,10 +4,7 @@ use cc1101_async::{
     AddressFilter, Cc1101Async, Cc1101AsyncError, CcaMode, CommandStrobe, MachineState, Modulation,
     NumPreambleBytes, PacketLength, RadioMode, SyncMode, FIFO_MAX_SIZE,
 };
-
-use embedded_hal::blocking::spi::{Transfer, Write};
-use embedded_hal::digital::v2::OutputPin;
-
+use embedded_hal::spi::SpiDevice;
 use rtic_monotonics::systick::Systick;
 
 const PACKET_LENGTH_BYTES: u8 = 64;
@@ -56,12 +53,10 @@ pub enum Cc1101WrapperError {
     UserInputError(usize),
     /// Platform-dependent SPI-errors, such as IO errors.
     Spi,
-    /// Platform-dependent GPIO-errors, such as IO errors.
-    Gpio,
 }
 
-impl<SpiE, GpioE> From<Cc1101AsyncError<SpiE, GpioE>> for Cc1101WrapperError {
-    fn from(e: Cc1101AsyncError<SpiE, GpioE>) -> Self {
+impl<SpiE> From<Cc1101AsyncError<SpiE>> for Cc1101WrapperError {
+    fn from(e: Cc1101AsyncError<SpiE>) -> Self {
         match e {
             Cc1101AsyncError::TimeoutError => Cc1101WrapperError::TimeoutError,
             Cc1101AsyncError::TxUnderflow => Cc1101WrapperError::TxUnderflow,
@@ -70,7 +65,6 @@ impl<SpiE, GpioE> From<Cc1101AsyncError<SpiE, GpioE>> for Cc1101WrapperError {
             Cc1101AsyncError::InvalidState(value) => Cc1101WrapperError::InvalidState(value),
             Cc1101AsyncError::UserInputError(value) => Cc1101WrapperError::UserInputError(value),
             Cc1101AsyncError::Spi(_) => Cc1101WrapperError::Spi,
-            Cc1101AsyncError::Gpio(_) => Cc1101WrapperError::Gpio,
         }
     }
 }
@@ -92,22 +86,21 @@ impl Default for DataBuffer {
     }
 }
 
-pub struct Cc1101Wrapper<SPI, CS> {
-    cc1101: Cc1101Async<SPI, CS>,
+pub struct Cc1101Wrapper<SPI> {
+    cc1101: Cc1101Async<SPI>,
     rx_data: DataBuffer,
     tx_data: DataBuffer,
     last_error: Option<Cc1101WrapperError>,
     error_count: u32,
 }
 
-impl<SPI, CS, SpiE, GpioE> Cc1101Wrapper<SPI, CS>
+impl<SPI, SpiE> Cc1101Wrapper<SPI>
 where
-    SPI: Transfer<u8, Error = SpiE> + Write<u8, Error = SpiE>,
-    CS: OutputPin<Error = GpioE>,
+    SPI: SpiDevice<u8, Error = SpiE>,
 {
     /// Instantiate the CC1101 Wrapper module and the underlying CC1101 driver.
-    pub fn new(spi: SPI, cs: CS) -> Self {
-        let cc1101 = Cc1101Async::new(spi, cs);
+    pub fn new(spi: SPI) -> Self {
+        let cc1101 = Cc1101Async::new(spi);
 
         match cc1101 {
             Ok(cc1101) => Cc1101Wrapper {
@@ -330,7 +323,7 @@ where
         Ok(rx_state)
     }
 
-    fn process_result<R>(&mut self, result: Result<R, Cc1101AsyncError<SpiE, GpioE>>) -> Option<R> {
+    fn process_result<R>(&mut self, result: Result<R, Cc1101AsyncError<SpiE>>) -> Option<R> {
         match result {
             Ok(value) => {
                 // Return the value
