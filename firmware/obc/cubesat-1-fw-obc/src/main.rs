@@ -10,7 +10,10 @@ use rtic_monotonics::{systick::Systick, Monotonic};
 #[cfg(feature = "nucleo-f767zi-board")]
 mod nucleo_f767zi_board {
     use super::*;
-    use cc1101_wrapper::Cc1101Wrapper;
+    use cc1101_wrapper::{
+        AddressFilter, Cc1101RfConfig, Cc1101Wrapper, CcaMode, ModulationFormat, NumPreamble,
+        PacketLength, SyncMode, FIFO_SIZE_MAX,
+    };
     use nucleo_f767zi::{
         button::{Button, ButtonParameters},
         led::{LedBlue, LedGreen, LedParameters, LedRed},
@@ -130,6 +133,7 @@ mod nucleo_f767zi_board {
             )
         }
 
+        #[allow(unused_variables, unused_mut)]
         #[task(priority = 1, shared = [serial])]
         async fn task_10ms(mut ctx: task_10ms::Context) {
             loop {
@@ -153,17 +157,44 @@ mod nucleo_f767zi_board {
 
         #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, serial])]
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
-            ctx.local.cc1101_wrp.init_config().unwrap();
+            let packet_length_max: u8 = 16;
+            let length_tx: u8 = 8;
+            let address: u8 = 33;
+
+            // Project specific radio configuration
+            let cc1101_rf_config = Cc1101RfConfig {
+                frequency: 433_000_000, // 433 MHz
+                bandwidth: 101_562,
+                deviation: 20_629,
+                datarate: 38_383,
+                modulation: ModulationFormat::BinaryFrequencyShiftKeying,
+                num_preamble: NumPreamble::Four,
+                sync_mode: SyncMode::MatchFull(0xCAFE),
+                packet_length: PacketLength::Variable(packet_length_max),
+                address_filter: AddressFilter::Device(address),
+                crc_enable: false,
+                white_data: false,
+                cca_mode: CcaMode::CciAlways,
+            };
+
+            ctx.local.cc1101_wrp.init_config(cc1101_rf_config).unwrap();
+
             Systick::delay(10.millis().into()).await;
 
             loop {
                 let _task_rf_com = {
                     let mut signal_received = false;
-                    let mut data_rx: [u8; 64] = [0; 64];
-                    let mut data_tx: [u8; 16] = [0xAA; 16];
-                    data_tx[0] = 10;
-                    data_tx[1] = 10;
-                    let mut length = 0;
+                    let mut data_rx: [u8; FIFO_SIZE_MAX as usize] = [0; FIFO_SIZE_MAX as usize];
+                    let mut data_tx: [u8; FIFO_SIZE_MAX as usize] = [0; FIFO_SIZE_MAX as usize];
+                    let mut length_rx: u8 = 0;
+                    let mut address_rx: u8 = 0;
+
+                    // Prepare Tx data
+                    let _setup_data_tx = {
+                        for (index, element) in data_tx.iter_mut().enumerate() {
+                            *element = index as u8;
+                        }
+                    };
 
                     // Lock shared "button_signal" resource. Use it in the critical section
                     ctx.shared.button_signal.lock(|signal| {
@@ -173,7 +204,7 @@ mod nucleo_f767zi_board {
 
                     // Test Code: Generate Tx data
                     if signal_received {
-                        let _ = ctx.local.cc1101_wrp.write_data(&mut data_tx);
+                        let _ = ctx.local.cc1101_wrp.write_data(&data_tx[0..(length_tx as usize)], address);
                     }
 
                     // Process RF
@@ -182,7 +213,7 @@ mod nucleo_f767zi_board {
                     if ctx.local.cc1101_wrp.is_data_received() {
                         ctx.local
                             .cc1101_wrp
-                            .read_data(&mut data_rx, &mut length)
+                            .read_data(&mut data_rx, &mut length_rx, &mut address_rx)
                             .unwrap();
 
                         // Test Code: Consume Rx data
@@ -190,8 +221,8 @@ mod nucleo_f767zi_board {
                         ctx.shared.serial.lock(|serial| {
                             serial.formatln(format_args!(
                                 "[task_rf_com] Rx ({}): {:02X?}",
-                                length,
-                                &data_rx[0..(length as usize)]
+                                length_rx,
+                                &data_rx[0..(length_rx as usize)]
                             ));
                         });
                     }
