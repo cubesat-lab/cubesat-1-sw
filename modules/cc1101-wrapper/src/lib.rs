@@ -12,7 +12,7 @@ enum RxState {
     Waiting,
     Receiving,
     Received,
-    // Error,
+    Error,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -53,6 +53,7 @@ impl<SpiE> From<Error<SpiE>> for Cc1101WrapperError {
 // Radio configuration
 pub struct Cc1101RfConfig {
     pub frequency: u64,
+    pub intermediate_frequency: u64,
     pub bandwidth: u64,
     pub deviation: u64,
     pub datarate: u64,
@@ -70,6 +71,7 @@ impl Default for Cc1101RfConfig {
     fn default() -> Self {
         Self {
             frequency: 0,
+            intermediate_frequency: 0,
             bandwidth: 0,
             deviation: 0,
             datarate: 0,
@@ -109,6 +111,8 @@ pub struct Cc1101Wrapper<SPI> {
     rf_config: Cc1101RfConfig,
     rx_data: DataBuffer,
     tx_data: DataBuffer,
+    last_rx_rssi: i16,
+    last_rx_lqi: u8,
     last_error: Option<Cc1101WrapperError>,
     error_count: u32,
 }
@@ -127,6 +131,8 @@ where
                 rf_config: Cc1101RfConfig::default(),
                 rx_data: DataBuffer::default(),
                 tx_data: DataBuffer::default(),
+                last_rx_rssi: 0,
+                last_rx_lqi: 0,
                 last_error: None,
                 error_count: 0,
             },
@@ -139,13 +145,12 @@ where
         // Save RF config
         self.rf_config = rf_config;
 
-        // TODO: Temp usage of set_defaults function
-        self.cc1101.set_defaults()?;
-
         // Reset CC1101
-        // self.cc1101.reset_chip()?;
+        self.cc1101.reset_chip()?;
 
         self.cc1101.set_frequency(self.rf_config.frequency)?;
+        self.cc1101
+            .set_freq_if(self.rf_config.intermediate_frequency)?;
         self.cc1101.set_chanbw(self.rf_config.bandwidth)?;
         self.cc1101.set_deviation(self.rf_config.deviation)?;
         self.cc1101.set_data_rate(self.rf_config.datarate)?;
@@ -158,6 +163,8 @@ where
         self.cc1101
             .set_address_filter(self.rf_config.address_filter)?;
         self.cc1101.crc_enable(self.rf_config.crc_enable)?;
+        self.cc1101.crc_autoflush_enable(true)?;
+        self.cc1101.append_status_enable(false)?;
         self.cc1101.white_data_enable(self.rf_config.white_data)?;
         self.cc1101.set_cca_mode(self.rf_config.cca_mode)?;
 
@@ -171,7 +178,6 @@ where
 
     /// CC1101 main function which processes the RF operations and shall be called cyclically.
     pub async fn main(&mut self) {
-
         // Dummy check of Machine State
         let result = self.cc1101.get_machine_state();
         let _ = self.process_result(result);
@@ -192,11 +198,15 @@ where
         data: &mut [u8],
         length: &mut u8,
         address: &mut u8,
+        rssi: &mut i16,
+        lqi: &mut u8,
     ) -> Result<(), Cc1101WrapperError> {
         if self.rx_data.ready {
             // Copy data from internal Rx Buffer
             *length = self.rx_data.length;
             *address = self.rx_data.address;
+            *rssi = self.last_rx_rssi;
+            *lqi = self.last_rx_lqi;
             data[..(self.rx_data.length as usize)]
                 .copy_from_slice(&self.rx_data.data[..(self.rx_data.length as usize)]);
 
@@ -284,7 +294,6 @@ where
 
         // Check if data is available for write
         if self.tx_data.ready {
-
             let result = self.cc1101.get_machine_state();
             let _ = self.process_result(result);
 
@@ -300,8 +309,10 @@ where
             let result = self.cc1101.get_machine_state();
             let _ = self.process_result(result);
 
-            let mut length: Option<u8> = Some(self.tx_data.length + 1); // Plus address byte
-            let mut address: Option<u8> = Some(self.tx_data.address);
+            // let mut length: Option<u8> = Some(self.tx_data.length + 1); // Plus address byte
+            let mut length: Option<u8> = None;
+            // let mut address: Option<u8> = Some(self.tx_data.address);
+            let mut address: Option<u8> = None;
 
             // Write data
             let result = self.cc1101.write_data(
@@ -344,16 +355,28 @@ where
             match rx_state {
                 RxState::Waiting => {
                     Systick::delay(fugit::ExtU64::millis(5)).await;
-                    let num_rxbytes = self.cc1101.get_rx_bytes()?;
-                    if num_rxbytes > 0 {
+
+                    let packet_status = self.cc1101.get_packet_status()?;
+                    if packet_status.sof_delimiter == true {
                         rx_state = RxState::Receiving;
                     }
+
+                    // let num_rxbytes = self.cc1101.get_rx_bytes()?;
+                    // if num_rxbytes > 0 {
+                    //     rx_state = RxState::Receiving;
+                    // }
                 }
                 RxState::Receiving => {
                     Systick::delay(fugit::ExtU64::millis(1)).await;
+
                     let num_rxbytes = self.cc1101.get_rx_bytes()?;
                     if (num_rxbytes > 0) && (num_rxbytes == last_rxbytes) {
-                        rx_state = RxState::Received;
+                        let packet_status = self.cc1101.get_packet_status()?;
+                        if packet_status.crc_ok == true {
+                            rx_state = RxState::Received;
+                        } else {
+                            rx_state = RxState::Error;
+                        }
                     }
                     last_rxbytes = num_rxbytes;
                     if last_rxbytes > FIFO_SIZE_MAX {
@@ -363,8 +386,8 @@ where
                     }
                 }
                 RxState::Received => {
-                    let mut length: Option<u8> = Some(0);
-                    let mut address: Option<u8> = Some(0);
+                    let mut length: Option<u8> = None;
+                    let mut address: Option<u8> = None;
 
                     self.cc1101.read_data(
                         &mut length,
@@ -373,14 +396,18 @@ where
                     )?;
 
                     // Store received data
-                    // self.rx_data.length = last_rxbytes; // Fixed Length?
-                    self.rx_data.length = length.unwrap() - 1; // Minus address byte
-                    self.rx_data.address = address.unwrap();
+                    self.rx_data.length = last_rxbytes; // Fixed Length?
+
+                    // self.rx_data.length = length.unwrap() - 1; // Minus address byte
+                    // self.rx_data.address = address.unwrap();
+                    self.rx_data.address = 0;
+                    self.last_rx_rssi = self.cc1101.get_rssi_dbm()?;
+                    self.last_rx_lqi = self.cc1101.get_lqi()?;
                     break;
                 }
-                // RxState::Error => {
-                //     // return Err(Cc1101WrapperError::UserInputError(last_rxbytes as usize));
-                // }
+                RxState::Error => {
+                    return Err(Cc1101WrapperError::CrcMismatch);
+                }
             }
         }
 

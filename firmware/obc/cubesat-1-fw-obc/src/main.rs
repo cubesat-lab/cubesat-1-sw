@@ -158,21 +158,23 @@ mod nucleo_f767zi_board {
         #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, serial])]
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
             let packet_length_max: u8 = 16;
-            let length_tx: u8 = 8;
+            let length_tx: u8 = packet_length_max;
             let address: u8 = 33;
+            let sync_word: u16 = 0xCAFE;
 
             // Project specific radio configuration
             let cc1101_rf_config = Cc1101RfConfig {
                 frequency: 433_000_000, // 433 MHz
+                intermediate_frequency: 203_125,
                 bandwidth: 101_562,
                 deviation: 20_629,
                 datarate: 38_383,
                 modulation: ModulationFormat::BinaryFrequencyShiftKeying,
-                num_preamble: NumPreamble::Four,
-                sync_mode: SyncMode::MatchFull(0xCAFE),
-                packet_length: PacketLength::Variable(packet_length_max),
-                address_filter: AddressFilter::Device(address),
-                crc_enable: false,
+                num_preamble: NumPreamble::Eight,
+                sync_mode: SyncMode::MatchFull(sync_word),
+                packet_length: PacketLength::Fixed(packet_length_max),
+                address_filter: AddressFilter::Disabled,
+                crc_enable: true,
                 white_data: false,
                 cca_mode: CcaMode::CciAlways,
             };
@@ -188,6 +190,8 @@ mod nucleo_f767zi_board {
                     let mut data_tx: [u8; FIFO_SIZE_MAX as usize] = [0; FIFO_SIZE_MAX as usize];
                     let mut length_rx: u8 = 0;
                     let mut address_rx: u8 = 0;
+                    let mut rssi: i16 = 0;
+                    let mut lqi: u8 = 0;
 
                     // Prepare Tx data
                     let _setup_data_tx = {
@@ -204,7 +208,10 @@ mod nucleo_f767zi_board {
 
                     // Test Code: Generate Tx data
                     if signal_received {
-                        let _ = ctx.local.cc1101_wrp.write_data(&data_tx[0..(length_tx as usize)], address);
+                        let _ = ctx
+                            .local
+                            .cc1101_wrp
+                            .write_data(&data_tx[0..(length_tx as usize)], address);
                     }
 
                     // Process RF
@@ -213,15 +220,23 @@ mod nucleo_f767zi_board {
                     if ctx.local.cc1101_wrp.is_data_received() {
                         ctx.local
                             .cc1101_wrp
-                            .read_data(&mut data_rx, &mut length_rx, &mut address_rx)
+                            .read_data(
+                                &mut data_rx,
+                                &mut length_rx,
+                                &mut address_rx,
+                                &mut rssi,
+                                &mut lqi,
+                            )
                             .unwrap();
 
                         // Test Code: Consume Rx data
                         // Lock shared "serial" resource. Use it in the critical section
                         ctx.shared.serial.lock(|serial| {
                             serial.formatln(format_args!(
-                                "[task_rf_com] Rx ({}): {:02X?}",
+                                "[task_rf_com] Rx (len: {}, rssi: {}, lqi: {}): {:02X?}",
                                 length_rx,
+                                rssi,
+                                lqi,
                                 &data_rx[0..(length_rx as usize)]
                             ));
                         });
