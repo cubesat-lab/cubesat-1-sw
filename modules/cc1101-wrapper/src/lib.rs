@@ -1,12 +1,14 @@
 #![no_std]
 
 pub use cc1101::{
-    AddressFilter, Cc1101, CcaMode, Error, MachineState, ModulationFormat, NumPreamble,
-    PacketLength, RadioMode, SyncMode, UserError, FIFO_SIZE_MAX,
+    AddressFilter, AutoCalibration, Cc1101, CcaMode, Error, GdoCfg, MachineState, ModulationFormat,
+    NumPreamble, PacketLength, RadioMode, SyncMode, UserError, FIFO_SIZE_MAX,
 };
-use embedded_hal::spi::SpiDevice;
+use embedded_hal::{digital::PinState, spi::SpiDevice};
 use fugit::Duration;
 use rtic_monotonics::systick::Systick;
+
+pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX;
 
 enum RxState {
     Waiting,
@@ -50,44 +52,12 @@ impl<SpiE> From<Error<SpiE>> for Cc1101WrapperError {
     }
 }
 
-// Radio configuration
-pub struct Cc1101RfConfig {
-    pub frequency: u64,
-    pub intermediate_frequency: u64,
-    pub bandwidth: u64,
-    pub deviation: u64,
-    pub datarate: u64,
-    pub modulation: ModulationFormat,
-    pub num_preamble: NumPreamble,
-    pub sync_mode: SyncMode,
-    pub packet_length: PacketLength,
-    pub address_filter: AddressFilter,
-    pub crc_enable: bool,
-    pub white_data: bool,
-    pub cca_mode: CcaMode,
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Cc1101RxMode {
+    Polling,
+    Interrupt,
 }
 
-impl Default for Cc1101RfConfig {
-    fn default() -> Self {
-        Self {
-            frequency: 0,
-            intermediate_frequency: 0,
-            bandwidth: 0,
-            deviation: 0,
-            datarate: 0,
-            modulation: ModulationFormat::BinaryFrequencyShiftKeying,
-            num_preamble: NumPreamble::Two,
-            sync_mode: SyncMode::Disabled,
-            packet_length: PacketLength::Fixed(0),
-            address_filter: AddressFilter::Disabled,
-            crc_enable: false,
-            white_data: false,
-            cca_mode: CcaMode::CciAlways,
-        }
-    }
-}
-
-// #[derive(Default, Clone, Copy)]
 struct DataBuffer {
     data: [u8; FIFO_SIZE_MAX as usize],
     length: u8,
@@ -108,7 +78,9 @@ impl Default for DataBuffer {
 
 pub struct Cc1101Wrapper<SPI> {
     cc1101: Cc1101<SPI>,
-    rf_config: Cc1101RfConfig,
+    rx_mode: Cc1101RxMode,
+    rx_init: bool,
+    rx_int_pending: bool,
     rx_data: DataBuffer,
     tx_data: DataBuffer,
     last_rx_rssi: i16,
@@ -128,7 +100,9 @@ where
         match cc1101 {
             Ok(cc1101) => Cc1101Wrapper {
                 cc1101,
-                rf_config: Cc1101RfConfig::default(),
+                rx_mode: Cc1101RxMode::Polling,
+                rx_init: false,
+                rx_int_pending: false,
                 rx_data: DataBuffer::default(),
                 tx_data: DataBuffer::default(),
                 last_rx_rssi: 0,
@@ -141,32 +115,34 @@ where
     }
 
     /// Initialize RF Transceiver's configuration specific to the project.
-    pub fn init_config(&mut self, rf_config: Cc1101RfConfig) -> Result<(), Cc1101WrapperError> {
-        // Save RF config
-        self.rf_config = rf_config;
-
+    pub fn init_config(&mut self) -> Result<(), Cc1101WrapperError> {
         // Reset CC1101
         self.cc1101.reset_chip()?;
 
-        self.cc1101.set_frequency(self.rf_config.frequency)?;
+        // Set project specific radio configuration
+        self.cc1101.set_frequency(433_000_000)?; // 433 MHz
+        self.cc1101.set_freq_if(203_125)?;
+        self.cc1101.set_chanbw(101_562)?;
+        self.cc1101.set_deviation(20_629)?;
+        self.cc1101.set_data_rate(38_383)?;
         self.cc1101
-            .set_freq_if(self.rf_config.intermediate_frequency)?;
-        self.cc1101.set_chanbw(self.rf_config.bandwidth)?;
-        self.cc1101.set_deviation(self.rf_config.deviation)?;
-        self.cc1101.set_data_rate(self.rf_config.datarate)?;
+            .set_modulation_format(ModulationFormat::BinaryFrequencyShiftKeying)?;
+        self.cc1101.set_num_preamble(NumPreamble::Eight)?;
+        self.cc1101.set_sync_mode(SyncMode::MatchFull(0xCAFE))?;
         self.cc1101
-            .set_modulation_format(self.rf_config.modulation)?;
-        self.cc1101.set_num_preamble(self.rf_config.num_preamble)?;
-        self.cc1101.set_sync_mode(self.rf_config.sync_mode)?;
-        self.cc1101
-            .set_packet_length(self.rf_config.packet_length)?;
-        self.cc1101
-            .set_address_filter(self.rf_config.address_filter)?;
-        self.cc1101.crc_enable(self.rf_config.crc_enable)?;
+            .set_packet_length(PacketLength::Fixed(PACKET_LENGTH))?;
+        self.cc1101.set_address_filter(AddressFilter::Disabled)?;
+        self.cc1101.crc_enable(true)?;
         self.cc1101.crc_autoflush_enable(true)?;
         self.cc1101.append_status_enable(false)?;
-        self.cc1101.white_data_enable(self.rf_config.white_data)?;
-        self.cc1101.set_cca_mode(self.rf_config.cca_mode)?;
+        self.cc1101.white_data_enable(false)?;
+        self.cc1101.set_cca_mode(CcaMode::CciAlways)?;
+        self.cc1101.set_autocalibration(AutoCalibration::FromIdle)?;
+        self.cc1101.set_gdo2_active_state(PinState::Low)?;
+        self.cc1101.set_gdo2_config(GdoCfg::CRC_OK)?;
+
+        // Set Rx mode
+        self.rx_mode = Cc1101RxMode::Interrupt;
 
         Ok(())
     }
@@ -178,15 +154,31 @@ where
 
     /// CC1101 main function which processes the RF operations and shall be called cyclically.
     pub async fn main(&mut self) {
-        // Dummy check of Machine State
-        let result = self.cc1101.get_machine_state();
-        let _ = self.process_result(result);
+        if !self.rx_init {
+            // Start Rx state at the first run
+            let result = self
+                .set_radio_mode(RadioMode::Receive, fugit::ExtU64::millis(10))
+                .await;
+            self.process_native_result(result);
+            self.rx_init = true;
+        }
 
         // Process RF receiving
-        self.process_receive().await;
+        match self.rx_mode {
+            Cc1101RxMode::Polling => {
+                self.process_receive_polling().await;
+            }
+            Cc1101RxMode::Interrupt => {
+                self.process_receive_interrupt().await;
+            }
+        };
 
         // Process RF transmitting
         self.process_transmit().await;
+    }
+
+    pub fn signal_rx_int(&mut self) {
+        self.rx_int_pending = true;
     }
 
     pub fn is_data_received(&mut self) -> bool {
@@ -245,16 +237,8 @@ where
 
     // ---------------------------------------------------------------------------------
 
-    async fn process_receive(&mut self) {
+    async fn process_receive_polling(&mut self) {
         let timeout = fugit::ExtU64::millis(10);
-
-        // Calibrate
-        let result = self.set_radio_mode(RadioMode::Calibrate, timeout).await;
-        self.process_native_result(result);
-        let result = self.await_machine_state(MachineState::IDLE, timeout).await;
-        self.process_native_result(result);
-
-        // Systick::delay(10.millis().into()).await;
 
         // Flush FIFO RX
         let result = self.cc1101.flush_rx_fifo_buffer();
@@ -266,7 +250,7 @@ where
         let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
         self.process_native_result(result);
 
-        match Systick::timeout_after(fugit::ExtU64::millis(100), self.receive()).await {
+        match Systick::timeout_after(fugit::ExtU64::millis(100), self.receive_polling()).await {
             Ok(result) => match result {
                 Ok(state) => match state {
                     RxState::Received => {
@@ -289,19 +273,43 @@ where
         let _ = self.process_result(result);
     }
 
+    async fn process_receive_interrupt(&mut self) {
+        let timeout = fugit::ExtU64::millis(10);
+
+        // Check if Rx interrupt is pending
+        if self.rx_int_pending {
+            self.rx_int_pending = false;
+
+            // Go to Idle
+            let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
+            self.process_native_result(result);
+
+            // Receive data
+            let result = self.receive_interrupt();
+            self.process_native_result(result);
+
+            // Restart Rx state
+            let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
+            self.process_native_result(result);
+        }
+    }
+
     async fn process_transmit(&mut self) {
         let timeout = fugit::ExtU64::millis(10);
 
         // Check if data is available for write
         if self.tx_data.ready {
-            let result = self.cc1101.get_machine_state();
-            let _ = self.process_result(result);
+            if self.rx_mode == Cc1101RxMode::Interrupt {
+                // Go to Idle
+                let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
+                self.process_native_result(result);
 
-            // Calibrate
-            let result = self.set_radio_mode(RadioMode::Calibrate, timeout).await;
-            self.process_native_result(result);
-            let result = self.await_machine_state(MachineState::IDLE, timeout).await;
-            self.process_native_result(result);
+                // Flush FIFO RX
+                let result = self.cc1101.flush_rx_fifo_buffer();
+                self.process_result(result);
+                let result = self.cc1101.get_machine_state();
+                let _ = self.process_result(result);
+            }
 
             // Flush FIFO Tx
             let result = self.cc1101.flush_tx_fifo_buffer();
@@ -333,21 +341,20 @@ where
             let result = self.await_machine_state(MachineState::IDLE, timeout).await;
             self.process_native_result(result);
 
-            // match result {
-            //     Ok(_) => {}
-            //     Err(_) => {
-            //         self.process_result(result);
-            //     }
-            // }
-
             let result = self.cc1101.get_machine_state();
             let _ = self.process_result(result);
 
             self.tx_data.ready = false;
+
+            if self.rx_mode == Cc1101RxMode::Interrupt {
+                // Restart Rx state
+                let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
+                self.process_native_result(result);
+            }
         }
     }
 
-    async fn receive(&mut self) -> Result<RxState, Cc1101WrapperError> {
+    async fn receive_polling(&mut self) -> Result<RxState, Cc1101WrapperError> {
         let mut rx_state = RxState::Waiting;
         let mut last_rxbytes = 0;
 
@@ -357,14 +364,9 @@ where
                     Systick::delay(fugit::ExtU64::millis(5)).await;
 
                     let packet_status = self.cc1101.get_packet_status()?;
-                    if packet_status.sof_delimiter == true {
+                    if packet_status.sof_delimiter {
                         rx_state = RxState::Receiving;
                     }
-
-                    // let num_rxbytes = self.cc1101.get_rx_bytes()?;
-                    // if num_rxbytes > 0 {
-                    //     rx_state = RxState::Receiving;
-                    // }
                 }
                 RxState::Receiving => {
                     Systick::delay(fugit::ExtU64::millis(1)).await;
@@ -372,7 +374,7 @@ where
                     let num_rxbytes = self.cc1101.get_rx_bytes()?;
                     if (num_rxbytes > 0) && (num_rxbytes == last_rxbytes) {
                         let packet_status = self.cc1101.get_packet_status()?;
-                        if packet_status.crc_ok == true {
+                        if packet_status.crc_ok {
                             rx_state = RxState::Received;
                         } else {
                             rx_state = RxState::Error;
@@ -388,10 +390,14 @@ where
                 RxState::Received => {
                     let mut length: Option<u8> = None;
                     let mut address: Option<u8> = None;
+                    let mut rssi: Option<i16> = None;
+                    let mut lqi: Option<u8> = None;
 
                     self.cc1101.read_data(
                         &mut length,
                         &mut address,
+                        &mut rssi,
+                        &mut lqi,
                         &mut self.rx_data.data[0..(last_rxbytes as usize)],
                     )?;
 
@@ -412,6 +418,38 @@ where
         }
 
         Ok(rx_state)
+    }
+
+    fn receive_interrupt(&mut self) -> Result<(), Cc1101WrapperError> {
+        let mut length: Option<u8> = None;
+        let mut address: Option<u8> = None;
+        let mut rssi: Option<i16> = None;
+        let mut lqi: Option<u8> = None;
+
+        let rxbytes = self.cc1101.get_rx_bytes()?;
+        let packet_status = self.cc1101.get_packet_status()?;
+
+        if packet_status.crc_ok {
+            self.cc1101.read_data(
+                &mut length,
+                &mut address,
+                &mut rssi,
+                &mut lqi,
+                &mut self.rx_data.data[0..(rxbytes as usize)],
+            )?;
+
+            // Store received data
+            self.rx_data.ready = true;
+            self.rx_data.length = rxbytes;
+            self.rx_data.address = 0;
+
+            self.last_rx_rssi = self.cc1101.get_rssi_dbm()?;
+            self.last_rx_lqi = self.cc1101.get_lqi()?;
+        } else {
+            return Err(Cc1101WrapperError::CrcMismatch);
+        }
+
+        Ok(())
     }
 
     fn process_result<R>(&mut self, result: Result<R, Error<SpiE>>) -> Option<R> {
@@ -517,96 +555,4 @@ where
         };
         Ok(())
     }
-
-    // pub async fn test_transmit_old(&mut self) -> Result<(), Cc1101WrapperError> {
-
-    //     // Prepare data
-    //     let mut data: [u8; 64] = [0; 64];
-    //     for (index, element) in data.iter_mut().enumerate() {
-    //         *element = index as u8;
-    //     }
-    //     // data[0] = 64;
-
-    //     // Reset CC1101
-    //     self.cc1101.command(CommandStrobe::ResetChip)?;
-    //     Systick::delay(fugit::ExtU64::micros(2000)).await;
-    //     let _ = self.cc1101.get_machine_state()?;
-
-    //     // Flush FIFO TX
-    //     self.cc1101.command(CommandStrobe::FlushTxFifoBuffer)?;
-    //     let _ = self.cc1101.get_machine_state()?;
-
-    //     // Calibrate
-    //     self.cc1101.set_radio_mode(RadioMode::Calibrate).await?;
-    //     self.cc1101.await_machine_state(MachineState::IDLE).await?;
-
-    //     // Write data, start TX
-    //     self.cc1101.write_data(&mut data)?;
-    //     self.cc1101.set_radio_mode(RadioMode::Transmit).await?;
-    //     Systick::delay(fugit::ExtU64::micros(5000)).await;
-
-    //     // Wait for TX to finish, get result
-    //     let result = self.cc1101.await_machine_state(MachineState::IDLE).await;
-
-    //     match result {
-    //         Ok(_) => self.cc1101.command(CommandStrobe::NoOperation)?,
-    //         Err(e) => {
-    //             match e {
-    //                 Cc1101WrapperError::TimeoutError => self.cc1101.command(CommandStrobe::ResetChip)?,
-    //                 _ => self.cc1101.command(CommandStrobe::ResetRtcToEvent1)?,
-    //             }
-    //         },
-    //     }
-
-    //     let _ = self.cc1101.get_machine_state()?;
-
-    //     Ok(())
-    // }
-
-    // pub async fn test_transmit(&mut self) -> Result<(), Cc1101WrapperError> {
-    //     // Prepare data
-    //     // let mut data: [u8; 64] = [0; 64];
-    //     // for (index, element) in data.iter_mut().enumerate() {
-    //     //     *element = index as u8;
-    //     // }
-    //     // data[0] = 64;
-
-    //     let mut data: [u8; PACKET_LENGTH_BYTES + 2] = [0xCC; PACKET_LENGTH_BYTES + 2];
-    //     data[0] = PACKET_LENGTH_BYTES as u8;
-    //     data[1] = 0;
-
-    //     // Reset CC1101
-    //     self.cc1101.command(CommandStrobe::ResetChip)?;
-    //     Systick::delay(fugit::ExtU64::micros(2000)).await;
-    //     let _ = self.cc1101.get_machine_state()?;
-
-    //     // Flush FIFO TX
-    //     self.cc1101.command(CommandStrobe::FlushTxFifoBuffer)?;
-    //     let _ = self.cc1101.get_machine_state()?;
-
-    //     // Calibrate
-    //     self.cc1101.set_radio_mode(RadioMode::Calibrate).await?;
-    //     self.cc1101.await_machine_state(MachineState::IDLE).await?;
-
-    //     // Write data, start TX
-    //     self.cc1101.write_data(&mut data)?;
-    //     self.cc1101.get_tx_bytes()?;
-    //     self.cc1101.set_radio_mode(RadioMode::Transmit).await?;
-    //     Systick::delay(fugit::ExtU64::micros(5000)).await;
-
-    //     // Wait for TX to finish, get result
-    //     let result = self.cc1101.await_machine_state(MachineState::IDLE).await;
-
-    //     match result {
-    //         Ok(_) => self.cc1101.command(CommandStrobe::NoOperation)?,
-    //         Err(e) => match e {
-    //             Cc1101WrapperError::TimeoutError => self.cc1101.command(CommandStrobe::ResetChip)?,
-    //             _ => self.cc1101.command(CommandStrobe::ResetRtcToEvent1)?,
-    //         },
-    //     }
-
-    //     let _ = self.cc1101.get_machine_state()?;
-
-    //     Ok(())
-    // }
 }

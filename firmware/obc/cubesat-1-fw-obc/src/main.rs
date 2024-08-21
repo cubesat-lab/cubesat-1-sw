@@ -10,12 +10,10 @@ use rtic_monotonics::{systick::Systick, Monotonic};
 #[cfg(feature = "nucleo-f767zi-board")]
 mod nucleo_f767zi_board {
     use super::*;
-    use cc1101_wrapper::{
-        AddressFilter, Cc1101RfConfig, Cc1101Wrapper, CcaMode, ModulationFormat, NumPreamble,
-        PacketLength, SyncMode, FIFO_SIZE_MAX,
-    };
+    use cc1101_wrapper::{Cc1101Wrapper, PACKET_LENGTH};
     use nucleo_f767zi::{
         button::{Button, ButtonParameters},
+        event_pin::{EventPinCc1101Gdo2, EventPinParameters},
         led::{LedBlue, LedGreen, LedParameters, LedRed},
         serial::{SerialParameters, SerialUartUsb},
         spi::SpiMaster3,
@@ -43,6 +41,7 @@ mod nucleo_f767zi_board {
         struct Shared {
             serial: SerialUartUsb,
             button_signal: bool,
+            cc1101_int_signal: bool,
         }
 
         #[local]
@@ -51,6 +50,7 @@ mod nucleo_f767zi_board {
             led_green: LedGreen,
             led_blue: LedBlue,
             led_red: LedRed,
+            cc1101_int: EventPinCc1101Gdo2,
             cc1101_wrp: Cc1101Wrapper<Cc1101SpiAdapter>,
         }
 
@@ -64,6 +64,7 @@ mod nucleo_f767zi_board {
             let mut rcc = dp.RCC.constrain();
             let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
             let mut syscfg = dp.SYSCFG;
+            let mut exti = dp.EXTI;
 
             // Initialize GPIO Ports
             let gpiob = dp.GPIOB.split();
@@ -101,10 +102,18 @@ mod nucleo_f767zi_board {
             );
 
             // Initialize User Button
-            let mut exti = dp.EXTI;
             let button = Button::new(ButtonParameters {
                 pin: gpioc.pc13,
                 edge: Edge::Rising,
+                syscfg: &mut syscfg,
+                exti: &mut exti,
+                apb: &mut rcc.apb2,
+            });
+
+            // Initialize CC1101 interrupt
+            let cc1101_int = EventPinCc1101Gdo2::new(EventPinParameters {
+                pin: gpiod.pd2,
+                edge: Edge::Falling,
                 syscfg: &mut syscfg,
                 exti: &mut exti,
                 apb: &mut rcc.apb2,
@@ -122,12 +131,14 @@ mod nucleo_f767zi_board {
                 Shared {
                     serial,
                     button_signal: false,
+                    cc1101_int_signal: false,
                 },
                 Local {
                     button,
                     led_green,
                     led_blue,
                     led_red,
+                    cc1101_int,
                     cc1101_wrp,
                 },
             )
@@ -155,39 +166,18 @@ mod nucleo_f767zi_board {
             }
         }
 
-        #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, serial])]
+        #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, cc1101_int_signal, serial])]
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
-            let packet_length_max: u8 = 16;
-            let length_tx: u8 = packet_length_max;
-            let address: u8 = 33;
-            let sync_word: u16 = 0xCAFE;
-
-            // Project specific radio configuration
-            let cc1101_rf_config = Cc1101RfConfig {
-                frequency: 433_000_000, // 433 MHz
-                intermediate_frequency: 203_125,
-                bandwidth: 101_562,
-                deviation: 20_629,
-                datarate: 38_383,
-                modulation: ModulationFormat::BinaryFrequencyShiftKeying,
-                num_preamble: NumPreamble::Eight,
-                sync_mode: SyncMode::MatchFull(sync_word),
-                packet_length: PacketLength::Fixed(packet_length_max),
-                address_filter: AddressFilter::Disabled,
-                crc_enable: true,
-                white_data: false,
-                cca_mode: CcaMode::CciAlways,
-            };
-
-            ctx.local.cc1101_wrp.init_config(cc1101_rf_config).unwrap();
+            ctx.local.cc1101_wrp.init_config().unwrap();
 
             Systick::delay(10.millis().into()).await;
 
             loop {
                 let _task_rf_com = {
                     let mut signal_received = false;
-                    let mut data_rx: [u8; FIFO_SIZE_MAX as usize] = [0; FIFO_SIZE_MAX as usize];
-                    let mut data_tx: [u8; FIFO_SIZE_MAX as usize] = [0; FIFO_SIZE_MAX as usize];
+                    let mut rx_interrupt = false;
+                    let mut data_rx: [u8; PACKET_LENGTH as usize] = [0; PACKET_LENGTH as usize];
+                    let mut data_tx: [u8; PACKET_LENGTH as usize] = [0; PACKET_LENGTH as usize];
                     let mut length_rx: u8 = 0;
                     let mut address_rx: u8 = 0;
                     let mut rssi: i16 = 0;
@@ -206,12 +196,23 @@ mod nucleo_f767zi_board {
                         *signal = false;
                     });
 
+                    // Lock shared "cc1101_int_signal" resource. Use it in the critical section
+                    ctx.shared.cc1101_int_signal.lock(|signal| {
+                        rx_interrupt = *signal;
+                        *signal = false;
+                    });
+
                     // Test Code: Generate Tx data
                     if signal_received {
                         let _ = ctx
                             .local
                             .cc1101_wrp
-                            .write_data(&data_tx[0..(length_tx as usize)], address);
+                            .write_data(&data_tx[0..(PACKET_LENGTH as usize)], 0);
+                    }
+
+                    // Handle Rx interrupt for CC1101
+                    if rx_interrupt {
+                        ctx.local.cc1101_wrp.signal_rx_int();
                     }
 
                     // Process RF
@@ -293,6 +294,25 @@ mod nucleo_f767zi_board {
 
             // Obtain access to Button Peripheral and Clear Interrupt Pending Flag
             ctx.local.button.clear_interrupt_pending_bit();
+        }
+
+        #[task(binds = EXTI2, local = [cc1101_int], shared=[cc1101_int_signal, serial])]
+        fn cc1101_isr(mut ctx: cc1101_isr::Context) {
+            // Lock shared "cc1101_int_signal" resource. Use it in the critical section
+            ctx.shared.cc1101_int_signal.lock(|signal| {
+                *signal = true;
+            });
+
+            // Lock shared "serial" resource. Use it in the critical section
+            ctx.shared.serial.lock(|serial| {
+                serial.formatln(format_args!(
+                    "[cc1101_isr] time: {}",
+                    Systick::now().duration_since_epoch()
+                ));
+            });
+
+            // Obtain access to CC1101 Interrupt Pin and Clear Interrupt Pending Flag
+            ctx.local.cc1101_int.clear_interrupt_pending_bit();
         }
     }
 }

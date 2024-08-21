@@ -26,7 +26,7 @@ pub struct TemperatureSensor {
 impl TemperatureSensor {
     pub fn new(adc_common: ADC_COMMON, adc: ADC1, apb: &mut APB2, clocks: &Clocks) -> Self {
         // Setup ADC1
-        let adc1: Adc<ADC1> = Adc::adc1(adc, apb, &clocks, 12, true);
+        let adc1: Adc<ADC1> = Adc::adc1(adc, apb, clocks, 12, true);
 
         // Initialize internal temperature sensor
         // Enable the temperature and vref internal channels
@@ -48,7 +48,7 @@ impl TemperatureSensor {
     }
 
     pub fn read_temperature(&mut self) -> f32 {
-        if self.first_read == false {
+        if !self.first_read {
             self.first_read = true;
 
             // Discart first ADC reading

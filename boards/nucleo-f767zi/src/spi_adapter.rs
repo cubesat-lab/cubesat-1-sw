@@ -1,12 +1,11 @@
 use core::convert::Infallible;
-use embedded_hal_1::spi::{SpiDevice, ErrorType, Error, ErrorKind, Operation};
 use embedded_hal::{
     blocking::spi::{Transfer, Write},
+    digital::v2::OutputPin,
     spi::FullDuplex,
-    digital::v2::OutputPin
 };
+use embedded_hal_1::spi::{Error, ErrorKind, ErrorType, Operation, SpiDevice};
 use stm32f7xx_hal::spi::Error as SpiError;
-
 
 #[derive(Debug)]
 pub enum SpiAdapterError {
@@ -66,7 +65,10 @@ where
     SPI: Transfer<u8, Error = SpiError> + Write<u8, Error = SpiError> + FullDuplex<u8>,
     CS: OutputPin<Error = Infallible>,
 {
-    fn transaction(&mut self, operations: &mut [embedded_hal_1::spi::Operation<'_, u8>]) -> Result<(), Self::Error> {
+    fn transaction(
+        &mut self,
+        operations: &mut [embedded_hal_1::spi::Operation<'_, u8>],
+    ) -> Result<(), Self::Error> {
         self.cs.set_low()?;
         for op in operations {
             match op {
@@ -75,16 +77,12 @@ where
                     let _ = buf;
                     let _ = self.spi.read();
                     todo!();
-                },
-                Operation::Write(buf) => {
-                    self.spi.write(buf)?
-                },
-                Operation::Transfer(read, write) => {
-                    self._transfer(read, write)?
-                },
+                }
+                Operation::Write(buf) => self.spi.write(buf)?,
+                Operation::Transfer(read, write) => self._transfer(read, write)?,
                 Operation::TransferInPlace(buf) => {
                     self.spi.transfer(buf)?;
-                },
+                }
                 Operation::DelayNs(ns) => {
                     // TODO
                     let _ = ns;
