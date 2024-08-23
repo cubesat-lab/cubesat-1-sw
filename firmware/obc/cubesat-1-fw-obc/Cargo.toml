@@ -52,6 +52,10 @@ name = "button_and_leds"
 required-features = ["nucleo-f767zi-board"]
 
 [[example]]
+name = "cc1101_rx_tx_w_button"
+required-features = ["nucleo-f767zi-board"]
+
+[[example]]
 name = "hello_cubesat"
 required-features = ["nucleo-f767zi-board"]
 
