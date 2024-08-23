@@ -40,7 +40,7 @@ mod nucleo_f767zi_board {
         #[shared]
         struct Shared {
             serial: SerialUartUsb,
-            button_signal: bool,
+            button_int_signal: bool,
             cc1101_int_signal: bool,
         }
 
@@ -108,6 +108,7 @@ mod nucleo_f767zi_board {
                 syscfg: &mut syscfg,
                 exti: &mut exti,
                 apb: &mut rcc.apb2,
+                debounce_period: fugit::ExtU64::millis(150),
             });
 
             // Initialize CC1101 interrupt
@@ -130,7 +131,7 @@ mod nucleo_f767zi_board {
             (
                 Shared {
                     serial,
-                    button_signal: false,
+                    button_int_signal: false,
                     cc1101_int_signal: false,
                 },
                 Local {
@@ -166,20 +167,18 @@ mod nucleo_f767zi_board {
             }
         }
 
-        #[task(priority = 2, local = [cc1101_wrp], shared = [button_signal, cc1101_int_signal, serial])]
+        #[task(priority = 2, local = [cc1101_wrp], shared = [button_int_signal, cc1101_int_signal, serial])]
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
             ctx.local.cc1101_wrp.init_config().unwrap();
 
-            Systick::delay(10.millis().into()).await;
+            Systick::delay(100.millis().into()).await;
 
             loop {
                 let _task_rf_com = {
-                    let mut signal_received = false;
-                    let mut rx_interrupt = false;
+                    let mut button_int_flag = false;
+                    let mut cc1101_int_flag = false;
                     let mut data_rx: [u8; PACKET_LENGTH as usize] = [0; PACKET_LENGTH as usize];
                     let mut data_tx: [u8; PACKET_LENGTH as usize] = [0; PACKET_LENGTH as usize];
-                    let mut length_rx: u8 = 0;
-                    let mut address_rx: u8 = 0;
                     let mut rssi: i16 = 0;
                     let mut lqi: u8 = 0;
 
@@ -190,28 +189,28 @@ mod nucleo_f767zi_board {
                         }
                     };
 
-                    // Lock shared "button_signal" resource. Use it in the critical section
-                    ctx.shared.button_signal.lock(|signal| {
-                        signal_received = *signal;
+                    // Lock shared "button_int_signal" resource. Use it in the critical section
+                    ctx.shared.button_int_signal.lock(|signal| {
+                        button_int_flag = *signal;
                         *signal = false;
                     });
 
                     // Lock shared "cc1101_int_signal" resource. Use it in the critical section
                     ctx.shared.cc1101_int_signal.lock(|signal| {
-                        rx_interrupt = *signal;
+                        cc1101_int_flag = *signal;
                         *signal = false;
                     });
 
                     // Test Code: Generate Tx data
-                    if signal_received {
+                    if button_int_flag {
                         let _ = ctx
                             .local
                             .cc1101_wrp
-                            .write_data(&data_tx[0..(PACKET_LENGTH as usize)], 0);
+                            .write_data(&data_tx[0..(PACKET_LENGTH as usize)]);
                     }
 
                     // Handle Rx interrupt for CC1101
-                    if rx_interrupt {
+                    if cc1101_int_flag {
                         ctx.local.cc1101_wrp.signal_rx_int();
                     }
 
@@ -221,13 +220,7 @@ mod nucleo_f767zi_board {
                     if ctx.local.cc1101_wrp.is_data_received() {
                         ctx.local
                             .cc1101_wrp
-                            .read_data(
-                                &mut data_rx,
-                                &mut length_rx,
-                                &mut address_rx,
-                                &mut rssi,
-                                &mut lqi,
-                            )
+                            .read_data(&mut data_rx, &mut rssi, &mut lqi)
                             .unwrap();
 
                         // Test Code: Consume Rx data
@@ -235,10 +228,10 @@ mod nucleo_f767zi_board {
                         ctx.shared.serial.lock(|serial| {
                             serial.formatln(format_args!(
                                 "[task_rf_com] Rx (len: {}, rssi: {}, lqi: {}): {:02X?}",
-                                length_rx,
+                                PACKET_LENGTH,
                                 rssi,
                                 lqi,
-                                &data_rx[0..(length_rx as usize)]
+                                &data_rx[0..(PACKET_LENGTH as usize)]
                             ));
                         });
                     }
@@ -272,25 +265,34 @@ mod nucleo_f767zi_board {
             }
         }
 
-        #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[button_signal, serial])]
-        fn button_pressed(mut ctx: button_pressed::Context) {
-            // Lock shared "button_signal" resource. Use it in the critical section
-            ctx.shared.button_signal.lock(|signal| {
-                *signal = true;
-            });
+        #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[button_int_signal, serial])]
+        fn button_isr(mut ctx: button_isr::Context) {
+            let instant = Systick::now();
+            let debounced: bool = (instant - ctx.local.button.debounce_instant)
+                > ctx.local.button.get_debounce_period();
 
-            // Obtain access to LEDs Peripheral and toggle them
-            ctx.local.led_green.toggle();
-            ctx.local.led_blue.toggle();
-            ctx.local.led_red.toggle();
+            // Check if debounce time elapsed
+            if debounced {
+                ctx.local.button.debounce_instant = instant;
 
-            // Lock shared "serial" resource. Use it in the critical section
-            ctx.shared.serial.lock(|serial| {
-                serial.formatln(format_args!(
-                    "[button_pressed] time: {}",
-                    Systick::now().duration_since_epoch()
-                ));
-            });
+                // Lock shared "button_int_signal" resource. Use it in the critical section
+                ctx.shared.button_int_signal.lock(|signal| {
+                    *signal = true;
+                });
+
+                // Obtain access to LEDs Peripheral and toggle them
+                ctx.local.led_green.toggle();
+                ctx.local.led_blue.toggle();
+                ctx.local.led_red.toggle();
+
+                // Lock shared "serial" resource. Use it in the critical section
+                ctx.shared.serial.lock(|serial| {
+                    serial.formatln(format_args!(
+                        "[button_isr] time: {}",
+                        Systick::now().duration_since_epoch()
+                    ));
+                });
+            }
 
             // Obtain access to Button Peripheral and Clear Interrupt Pending Flag
             ctx.local.button.clear_interrupt_pending_bit();
@@ -459,7 +461,7 @@ mod stm32vldiscovery_board {
         }
 
         #[task(binds = EXTI0, local = [button, led_green, led_blue], shared=[serial])]
-        fn button_pressed(mut ctx: button_pressed::Context) {
+        fn button_isr(mut ctx: button_isr::Context) {
             // Obtain access to LEDs Peripheral and toggle them
             ctx.local.led_green.toggle();
             ctx.local.led_blue.toggle();
@@ -467,7 +469,7 @@ mod stm32vldiscovery_board {
             // Lock shared "serial" resource. Use it in the critical section
             ctx.shared.serial.lock(|serial| {
                 serial.formatln(format_args!(
-                    "[button_pressed] time: {}",
+                    "[button_isr] time: {}",
                     Systick::now().duration_since_epoch()
                 ));
             });

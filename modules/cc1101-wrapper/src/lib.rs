@@ -5,8 +5,8 @@ pub use cc1101::{
     NumPreamble, PacketLength, RadioMode, SyncMode, UserError, FIFO_SIZE_MAX,
 };
 use embedded_hal::{digital::PinState, spi::SpiDevice};
-use fugit::Duration;
-use rtic_monotonics::systick::Systick;
+use fugit::{Duration, Instant};
+use rtic_monotonics::{systick::Systick, Monotonic};
 
 pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX;
 
@@ -19,6 +19,8 @@ enum RxState {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Cc1101WrapperError {
+    /// Monitoring error
+    MonitoringError,
     /// Receive buffer is empty
     RxBufferEmpty,
     /// Transmit buffer has unsent data
@@ -85,6 +87,7 @@ pub struct Cc1101Wrapper<SPI> {
     tx_data: DataBuffer,
     last_rx_rssi: i16,
     last_rx_lqi: u8,
+    timestamp_monitor: Instant<u64, 1, 1000>,
     last_error: Option<Cc1101WrapperError>,
     error_count: u32,
 }
@@ -107,6 +110,7 @@ where
                 tx_data: DataBuffer::default(),
                 last_rx_rssi: 0,
                 last_rx_lqi: 0,
+                timestamp_monitor: Systick::now(),
                 last_error: None,
                 error_count: 0,
             },
@@ -154,13 +158,12 @@ where
 
     /// CC1101 main function which processes the RF operations and shall be called cyclically.
     pub async fn main(&mut self) {
+        // Initialization activity
         if !self.rx_init {
-            // Start Rx state at the first run
-            let result = self
-                .set_radio_mode(RadioMode::Receive, fugit::ExtU64::millis(10))
-                .await;
-            self.process_native_result(result);
             self.rx_init = true;
+
+            // Start Rx state at the first run
+            self.start_rx_state().await;
         }
 
         // Process RF receiving
@@ -175,6 +178,9 @@ where
 
         // Process RF transmitting
         self.process_transmit().await;
+
+        // Transciever monitoring
+        self.monitor().await;
     }
 
     pub fn signal_rx_int(&mut self) {
@@ -188,15 +194,11 @@ where
     pub fn read_data(
         &mut self,
         data: &mut [u8],
-        length: &mut u8,
-        address: &mut u8,
         rssi: &mut i16,
         lqi: &mut u8,
     ) -> Result<(), Cc1101WrapperError> {
         if self.rx_data.ready {
             // Copy data from internal Rx Buffer
-            *length = self.rx_data.length;
-            *address = self.rx_data.address;
             *rssi = self.last_rx_rssi;
             *lqi = self.last_rx_lqi;
             data[..(self.rx_data.length as usize)]
@@ -211,11 +213,10 @@ where
         Ok(())
     }
 
-    pub fn write_data(&mut self, data: &[u8], address: u8) -> Result<(), Cc1101WrapperError> {
+    pub fn write_data(&mut self, data: &[u8]) -> Result<(), Cc1101WrapperError> {
         if !self.tx_data.ready {
             // Copy data into internal Tx Buffer
             self.tx_data.length = data.len() as u8;
-            self.tx_data.address = address;
             self.tx_data.data[..(self.tx_data.length as usize)].copy_from_slice(data);
             self.tx_data.ready = true;
         } else {
@@ -237,9 +238,19 @@ where
 
     // ---------------------------------------------------------------------------------
 
-    async fn process_receive_polling(&mut self) {
+    async fn start_idle_state(&mut self) {
         let timeout = fugit::ExtU64::millis(10);
+        let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
+        self.process_native_result(result);
+    }
 
+    async fn start_rx_state(&mut self) {
+        let timeout = fugit::ExtU64::millis(10);
+        let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
+        self.process_native_result(result);
+    }
+
+    async fn process_receive_polling(&mut self) {
         // Flush FIFO RX
         let result = self.cc1101.flush_rx_fifo_buffer();
         self.process_result(result);
@@ -247,8 +258,7 @@ where
         let _ = self.process_result(result);
 
         // Start Rx
-        let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
-        self.process_native_result(result);
+        self.start_rx_state().await;
 
         match Systick::timeout_after(fugit::ExtU64::millis(100), self.receive_polling()).await {
             Ok(result) => match result {
@@ -259,38 +269,30 @@ where
                     _ => { /* Unreachable statement */ }
                 },
                 Err(error) => {
-                    // Store error
-                    self.last_error = Some(error);
-                    self.error_count += 1;
+                    self.store_error(error);
                 }
             },
             Err(_) => { /* Timeout Error */ }
         };
 
-        let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
-        self.process_native_result(result);
-        let result = self.cc1101.get_machine_state();
-        let _ = self.process_result(result);
+        // Start Idle state
+        self.start_idle_state().await;
     }
 
     async fn process_receive_interrupt(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
-
         // Check if Rx interrupt is pending
         if self.rx_int_pending {
             self.rx_int_pending = false;
 
-            // Go to Idle
-            let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
-            self.process_native_result(result);
+            // Start Idle state
+            self.start_idle_state().await;
 
             // Receive data
             let result = self.receive_interrupt();
             self.process_native_result(result);
 
             // Restart Rx state
-            let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
-            self.process_native_result(result);
+            self.start_rx_state().await;
         }
     }
 
@@ -300,9 +302,8 @@ where
         // Check if data is available for write
         if self.tx_data.ready {
             if self.rx_mode == Cc1101RxMode::Interrupt {
-                // Go to Idle
-                let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
-                self.process_native_result(result);
+                // Start Idle state
+                self.start_idle_state().await;
 
                 // Flush FIFO RX
                 let result = self.cc1101.flush_rx_fifo_buffer();
@@ -341,15 +342,40 @@ where
             let result = self.await_machine_state(MachineState::IDLE, timeout).await;
             self.process_native_result(result);
 
-            let result = self.cc1101.get_machine_state();
-            let _ = self.process_result(result);
-
             self.tx_data.ready = false;
 
             if self.rx_mode == Cc1101RxMode::Interrupt {
                 // Restart Rx state
-                let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
-                self.process_native_result(result);
+                self.start_rx_state().await;
+            }
+        }
+    }
+
+    async fn monitor(&mut self) {
+        let period: Duration<u64, 1, 1000> = fugit::ExtU64::millis(1000);
+        let timestamp_now = Systick::now();
+
+        if (timestamp_now - self.timestamp_monitor) > period {
+            self.timestamp_monitor = timestamp_now;
+
+            let result = self.cc1101.get_machine_state();
+
+            match self.process_result(result) {
+                Some(state) => {
+                    if state != MachineState::RX {
+                        self.store_error(Cc1101WrapperError::MonitoringError);
+
+                        // Restart Rx state
+                        self.start_rx_state().await;
+                    }
+                }
+                None => {
+                    // Start Idle state
+                    self.start_idle_state().await;
+
+                    // Restart Rx state
+                    self.start_rx_state().await;
+                }
             }
         }
     }
@@ -452,6 +478,12 @@ where
         Ok(())
     }
 
+    /// Store error
+    fn store_error(&mut self, error: Cc1101WrapperError) {
+        self.last_error = Some(error);
+        self.error_count += 1;
+    }
+
     fn process_result<R>(&mut self, result: Result<R, Error<SpiE>>) -> Option<R> {
         match result {
             Ok(value) => {
@@ -459,9 +491,7 @@ where
                 Some(value)
             }
             Err(error) => {
-                // Store error
-                self.last_error = Some(error.into());
-                self.error_count += 1;
+                self.store_error(error.into());
                 None
             }
         }
@@ -474,9 +504,7 @@ where
                 Some(value)
             }
             Err(error) => {
-                // Store error
-                self.last_error = Some(error);
-                self.error_count += 1;
+                self.store_error(error);
                 None
             }
         }
