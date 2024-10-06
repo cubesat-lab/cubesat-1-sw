@@ -21,3 +21,9 @@ impl McuUid {
         }
     }
 }
+
+impl Default for McuUid {
+    fn default() -> Self {
+        Self::new()
+    }
+}

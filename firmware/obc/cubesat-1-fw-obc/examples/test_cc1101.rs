@@ -79,11 +79,11 @@ fn main() -> ! {
 
     // Initialize CC1101 Wrapper - RF Device 1
     let mut cc1101_wrp_1 = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
-    cc1101_wrp_1.configure_radio().unwrap();
+    cc1101_wrp_1.init_config().unwrap();
 
     // Initialize CC1101 Wrapper - RF Device 2
     let mut cc1101_wrp_2 = Cc1101Wrapper::new(spi_4.spi, spi_4.cs);
-    cc1101_wrp_2.configure_radio().unwrap();
+    cc1101_wrp_2.init_config().unwrap();
 
     // Get HW Info from both RF Devices
     let (partnum_1, version_1) = cc1101_wrp_1.get_hw_info().unwrap();

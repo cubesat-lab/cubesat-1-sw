@@ -10,12 +10,12 @@ publish = false
 
 
 [dependencies]
-# common dependencies
+# Common dependencies
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] } # NOTE: "critical-section-single-core" is critically important for "rtic-monotonics". Similar problem example: https://ferrous-systems.com/blog/defmt-rtt-linker-error/
 cortex-m-rt = "0.7.2"
 cortex-m-semihosting = "0.5.0"
 embedded-hal = "0.2.7"
-fugit = "0.3.6"
+fugit = "0.3.7"
 panic-halt = "0.2.0"
 crc = "3.0.0"
 nb = "1.1.0"
@@ -26,7 +26,7 @@ frame-processing = { path = "../../../modules/frame-processing", version = "0.1.
 cc1101-wrapper = { path = "../../../modules/cc1101-wrapper", version = "0.1.0", optional = true }
 nucleo-f767zi = { path = "../../../boards/nucleo-f767zi", version = "0.1.0", optional = true }
 rtic = { version = "2.0.1", features = ["cortex-m", "rtic-monotonics", "thumbv7-backend"], optional = true }
-rtic-monotonics = { version = "1.2.0", features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"], optional = true }
+rtic-monotonics = { version = "1.4.1", features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"], optional = true }
 stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"], optional = true }
 
 # "stm32vldiscovery" specific dependencies
@@ -39,12 +39,20 @@ panic-semihosting = "0.6.0"
 
 
 [features]
+# Elementary features
+task_10ms = []
+
+# Board features
 nucleo-f767zi-board = ["cc1101-wrapper", "nucleo-f767zi", "rtic", "rtic-monotonics", "stm32f7xx-hal"]
 stm32vldiscovery-board = ["stm32vldiscovery", "rtic", "rtic-monotonics", "stm32f1xx-hal"]
 
 
 [[example]]
 name = "button_and_leds"
+required-features = ["nucleo-f767zi-board"]
+
+[[example]]
+name = "cc1101_rx_tx_w_button"
 required-features = ["nucleo-f767zi-board"]
 
 [[example]]

@@ -10,6 +10,11 @@ edition = "2021"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.2"
 embedded-hal = "0.2.7"
-fugit = "0.3.6"
+fugit = "0.3.7"
 nb = "1.0"
+rtic-monotonics = { version = "1.4.1", features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"] }
 stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"] }
+
+[dependencies.embedded-hal-1]
+package = "embedded-hal"
+version = "1.0"
