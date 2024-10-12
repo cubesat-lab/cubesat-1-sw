@@ -7,5 +7,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# embedded-hal = "1.0"
+embedded-hal = "1.0"
 stm32f4xx-hal = { version = "0.22.0", features = ["stm32f446"] }

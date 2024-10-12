@@ -14,7 +14,6 @@ publish = false
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] } # NOTE: "critical-section-single-core" is critically important for "rtic-monotonics". Similar problem example: https://ferrous-systems.com/blog/defmt-rtt-linker-error/
 cortex-m-rt = "0.7.2"
 cortex-m-semihosting = "0.5.0"
-embedded-hal = "0.2.7"
 fugit = "0.3.7"
 panic-halt = "0.2.0"
 crc = "3.0.0"
@@ -23,19 +22,41 @@ unwrap-infallible = "0.1.5"
 frame-processing = { path = "../../../modules/frame-processing", version = "0.1.0"}
 
 # "nucleo-f446re-board" specific dependencies
-nucleo-f446re = { path = "../../../boards/nucleo-f446re", version = "0.1.0", optional = true }
 stm32f4xx-hal = { version = "0.22.0", features = ["stm32f446"], optional = true }
+nucleo-f446re = { path = "../../../boards/nucleo-f446re", version = "0.1.0", optional = true }
 
 # "nucleo-f767zi-board" specific dependencies
-cc1101-wrapper = { path = "../../../modules/cc1101-wrapper", version = "0.1.0", optional = true }
-nucleo-f767zi = { path = "../../../boards/nucleo-f767zi", version = "0.1.0", optional = true }
-rtic = { version = "2.0.1", features = ["cortex-m", "rtic-monotonics", "thumbv7-backend"], optional = true }
-rtic-monotonics = { version = "1.4.1", features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"], optional = true }
 stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"], optional = true }
+nucleo-f767zi = { path = "../../../boards/nucleo-f767zi", version = "0.1.0", optional = true }
+rtic = { version = "2.1.1", features = ["cortex-m", "rtic-monotonics", "thumbv7-backend"], optional = true }
+cc1101-wrapper = { path = "../../../modules/cc1101-wrapper", version = "0.1.0", optional = true }
 
 # "stm32vldiscovery" specific dependencies
-stm32f1xx-hal = { version = "0.10.0", features = ["rt", "stm32f100", "medium"], optional = true}
+stm32f1xx-hal = { version = "0.10.0", features = ["stm32f100", "rt", "medium"], optional = true}
 stm32vldiscovery = { path = "../../../boards/stm32vldiscovery", version = "0.1.0", optional = true }
+
+
+[dependencies.embedded-hal-02]
+package = "embedded-hal"
+version = "0.2.7"
+optional = true
+
+[dependencies.embedded-hal-1]
+package = "embedded-hal"
+version = "1.0"
+optional = true
+
+[dependencies.rtic-monotonics-1]
+package = "rtic-monotonics"
+version = "1.4.1"
+features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"]
+optional = true
+
+[dependencies.rtic-monotonics-2]
+package = "rtic-monotonics"
+version = "2.0.2"
+features = ["cortex-m-systick", "systick-64bit", "stm32f446re"]
+optional = true
 
 
 [dev-dependencies]
@@ -47,9 +68,9 @@ panic-semihosting = "0.6.0"
 task_10ms = []
 
 # Board features
-nucleo-f446re-board = ["nucleo-f446re", "stm32f4xx-hal"]
-nucleo-f767zi-board = ["cc1101-wrapper", "nucleo-f767zi", "rtic", "rtic-monotonics", "stm32f7xx-hal"]
-stm32vldiscovery-board = ["stm32vldiscovery", "rtic", "rtic-monotonics", "stm32f1xx-hal"]
+nucleo-f446re-board = ["embedded-hal-1", "nucleo-f446re", "stm32f4xx-hal", "rtic", "rtic-monotonics-2"]
+nucleo-f767zi-board = ["embedded-hal-02", "nucleo-f767zi", "stm32f7xx-hal", "rtic", "rtic-monotonics-1", "cc1101-wrapper"]
+stm32vldiscovery-board = ["embedded-hal-02", "stm32vldiscovery", "stm32f1xx-hal", "rtic", "rtic-monotonics-1"]
 
 
 [[example]]
@@ -67,6 +88,10 @@ required-features = ["nucleo-f767zi-board"]
 [[example]]
 name = "hello_stm32vldiscovery"
 required-features = ["stm32vldiscovery-board"]
+
+[[example]]
+name = "rtic_button_and_led_nucleo_f446re"
+required-features = ["nucleo-f446re-board"]
 
 [[example]]
 name = "serial_nucleo_f446re"

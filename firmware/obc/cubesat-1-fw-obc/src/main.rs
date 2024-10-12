@@ -5,7 +5,7 @@
 use fugit::HertzU32;
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics::{systick::Systick, Monotonic};
+use rtic_monotonics_1::{systick::Systick, Monotonic};
 
 #[cfg(feature = "nucleo-f767zi-board")]
 mod nucleo_f767zi_board {
@@ -73,7 +73,7 @@ mod nucleo_f767zi_board {
 
             // Initialize systick
             let sysclk = (216.MHz() as HertzU32).to_Hz();
-            let systick_token = rtic_monotonics::create_systick_token!();
+            let systick_token = rtic_monotonics_1::create_systick_token!();
             Systick::start(cp.SYST, sysclk, systick_token);
 
             // Initialize LEDs

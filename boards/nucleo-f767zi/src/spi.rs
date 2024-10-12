@@ -92,7 +92,7 @@ where
     }
 
     /// Sends bytes to the slave chip. Returns the bytes received from the slave chip
-    pub fn transfer<'a>(&'a mut self, buffer: &'a mut [u8]) -> Result<&[u8], Error> {
+    pub fn transfer<'a>(&mut self, buffer: &'a mut [u8]) -> Result<&'a [u8], Error> {
         self.spi.transfer(buffer)
     }
 
