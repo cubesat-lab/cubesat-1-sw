@@ -20,6 +20,7 @@ crc = "3.0.0"
 nb = "1.1.0"
 unwrap-infallible = "0.1.5"
 frame-processing = { path = "../../../modules/frame-processing", version = "0.1.0"}
+sys-time = { path = "../../../modules/sys-time", version = "0.1.0" }
 
 # "nucleo-f446re-board" specific dependencies
 stm32f4xx-hal = { version = "0.22.0", features = ["stm32f446"], optional = true }
@@ -46,18 +47,6 @@ package = "embedded-hal"
 version = "1.0"
 optional = true
 
-[dependencies.rtic-monotonics-1]
-package = "rtic-monotonics"
-version = "1.4.1"
-features = ["cortex-m-systick", "embedded-hal-async", "systick-64bit", "stm32f767zi"]
-optional = true
-
-[dependencies.rtic-monotonics-2]
-package = "rtic-monotonics"
-version = "2.0.2"
-features = ["cortex-m-systick", "systick-64bit", "stm32f446re"]
-optional = true
-
 
 [dev-dependencies]
 panic-semihosting = "0.6.0"
@@ -68,9 +57,9 @@ panic-semihosting = "0.6.0"
 task_10ms = []
 
 # Board features
-nucleo-f446re-board = ["embedded-hal-1", "nucleo-f446re", "stm32f4xx-hal", "rtic", "rtic-monotonics-2"]
-nucleo-f767zi-board = ["embedded-hal-02", "nucleo-f767zi", "stm32f7xx-hal", "rtic", "rtic-monotonics-1", "cc1101-wrapper"]
-stm32vldiscovery-board = ["embedded-hal-02", "stm32vldiscovery", "stm32f1xx-hal", "rtic", "rtic-monotonics-1"]
+nucleo-f446re-board = ["embedded-hal-1", "nucleo-f446re", "stm32f4xx-hal", "rtic", ]
+nucleo-f767zi-board = ["embedded-hal-02", "nucleo-f767zi", "stm32f7xx-hal", "rtic", "cc1101-wrapper"]
+stm32vldiscovery-board = ["embedded-hal-02", "stm32vldiscovery", "stm32f1xx-hal", "rtic"]
 
 
 [[example]]

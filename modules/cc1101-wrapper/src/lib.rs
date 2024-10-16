@@ -6,7 +6,7 @@ pub use cc1101::{
 };
 use embedded_hal::{digital::PinState, spi::SpiDevice};
 use fugit::{Duration, Instant};
-use rtic_monotonics::{systick::Systick, Monotonic};
+use sys_time::prelude::*;
 
 pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX;
 
@@ -110,7 +110,7 @@ where
                 tx_data: DataBuffer::default(),
                 last_rx_rssi: 0,
                 last_rx_lqi: 0,
-                timestamp_monitor: Systick::now(),
+                timestamp_monitor: SysTime::now(),
                 last_error: None,
                 error_count: 0,
             },
@@ -260,7 +260,7 @@ where
         // Start Rx
         self.start_rx_state().await;
 
-        match Systick::timeout_after(fugit::ExtU64::millis(100), self.receive_polling()).await {
+        match SysTime::timeout_after(fugit::ExtU64::millis(100), self.receive_polling()).await {
             Ok(result) => match result {
                 Ok(state) => match state {
                     RxState::Received => {
@@ -336,7 +336,7 @@ where
             // Start Tx
             let result = self.set_radio_mode(RadioMode::Transmit, timeout).await;
             self.process_native_result(result);
-            Systick::delay(fugit::ExtU64::millis(5)).await;
+            SysTime::delay(fugit::ExtU64::millis(5)).await;
 
             // Wait for Tx to finish and get the result
             let result = self.await_machine_state(MachineState::IDLE, timeout).await;
@@ -353,7 +353,7 @@ where
 
     async fn monitor(&mut self) {
         let period: Duration<u64, 1, 1000> = fugit::ExtU64::millis(1000);
-        let timestamp_now = Systick::now();
+        let timestamp_now = SysTime::now();
 
         if (timestamp_now - self.timestamp_monitor) > period {
             self.timestamp_monitor = timestamp_now;
@@ -364,6 +364,8 @@ where
                 Some(state) => {
                     if state != MachineState::RX {
                         self.store_error(Cc1101WrapperError::MonitoringError);
+
+                        // TODO: Clear all errors (flush RX, TX buffers, other?)
 
                         // Restart Rx state
                         self.start_rx_state().await;
@@ -387,7 +389,7 @@ where
         loop {
             match rx_state {
                 RxState::Waiting => {
-                    Systick::delay(fugit::ExtU64::millis(5)).await;
+                    SysTime::delay(fugit::ExtU64::millis(5)).await;
 
                     let packet_status = self.cc1101.get_packet_status()?;
                     if packet_status.sof_delimiter {
@@ -395,7 +397,7 @@ where
                     }
                 }
                 RxState::Receiving => {
-                    Systick::delay(fugit::ExtU64::millis(1)).await;
+                    SysTime::delay(fugit::ExtU64::millis(1)).await;
 
                     let num_rxbytes = self.cc1101.get_rx_bytes()?;
                     if (num_rxbytes > 0) && (num_rxbytes == last_rxbytes) {
@@ -534,7 +536,7 @@ where
                 /* Ignore other states */
             }
 
-            Systick::delay(delay).await;
+            SysTime::delay(delay).await;
         }
     }
 
@@ -543,7 +545,7 @@ where
         target_state: MachineState,
         timeout: Duration<u64, 1, 1000>,
     ) -> Result<(), Cc1101WrapperError> {
-        match Systick::timeout_after(timeout, self.check_machine_state(target_state)).await {
+        match SysTime::timeout_after(timeout, self.check_machine_state(target_state)).await {
             Ok(result) => result,
             Err(_) => Err(Cc1101WrapperError::TimeoutError),
         }

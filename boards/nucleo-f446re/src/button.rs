@@ -1,5 +1,5 @@
 // use fugit::{Duration, Instant};
-// use rtic_monotonics::{systick::Systick, Monotonic};
+use sys_time::prelude::*;
 pub use stm32f4xx_hal::gpio::Edge;
 use stm32f4xx_hal::{
     gpio::{ExtiPin, Input, Pin, Pull},
@@ -33,7 +33,7 @@ impl Button {
         Self {
             btn: button,
             // debounce_period: button_parameters.debounce_period,
-            // debounce_instant: Systick::now(),
+            // debounce_instant: SysTime::now(),
         }
     }
 

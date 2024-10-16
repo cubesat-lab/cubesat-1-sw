@@ -5,7 +5,7 @@
 use fugit::HertzU32;
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics::{systick::Systick, Monotonic};
+use sys_time::prelude::*;
 
 mod nucleo_f767zi_board {
     use super::*;
@@ -70,10 +70,9 @@ mod nucleo_f767zi_board {
             let gpioc = dp.GPIOC.split();
             let gpiod = dp.GPIOD.split();
 
-            // Initialize systick
+            // Initialize SysTime
             let sysclk = (216.MHz() as HertzU32).to_Hz();
-            let systick_token = rtic_monotonics::create_systick_token!();
-            Systick::start(cp.SYST, sysclk, systick_token);
+            SysTime::start(cp.SYST, sysclk);
 
             // Initialize LEDs
             let led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
@@ -148,14 +147,14 @@ mod nucleo_f767zi_board {
         #[task(priority = 1, shared = [serial])]
         async fn task_10ms(mut ctx: task_10ms::Context) {
             loop {
-                let mut instant = Systick::now();
+                let mut instant = SysTime::now();
                 instant += 10.millis();
 
                 let _task_10ms = {
                     // Do nothing
                 };
 
-                Systick::delay_until(instant).await;
+                SysTime::delay_until(instant).await;
             }
         }
 
@@ -163,7 +162,7 @@ mod nucleo_f767zi_board {
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
             ctx.local.cc1101_wrp.init_config().unwrap();
 
-            Systick::delay(100.millis().into()).await;
+            SysTime::delay(100.millis().into()).await;
 
             loop {
                 let _task_rf_com = {
@@ -241,7 +240,7 @@ mod nucleo_f767zi_board {
                     }
 
                     // Test Code: Simulate other activity
-                    Systick::delay(10.millis().into()).await;
+                    SysTime::delay(10.millis().into()).await;
                 };
             }
         }
@@ -259,7 +258,7 @@ mod nucleo_f767zi_board {
 
         #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[button_int_signal, serial])]
         fn button_isr(mut ctx: button_isr::Context) {
-            let instant = Systick::now();
+            let instant = SysTime::now();
             let debounced: bool = (instant - ctx.local.button.debounce_instant)
                 > ctx.local.button.get_debounce_period();
 
@@ -281,7 +280,7 @@ mod nucleo_f767zi_board {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[button_isr] time: {}",
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             }
@@ -301,7 +300,7 @@ mod nucleo_f767zi_board {
             ctx.shared.serial.lock(|serial| {
                 serial.formatln(format_args!(
                     "[cc1101_isr] time: {}",
-                    Systick::now().duration_since_epoch()
+                    SysTime::now().duration_since_epoch()
                 ));
             });
 

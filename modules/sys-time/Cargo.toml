@@ -1,0 +1,9 @@
+[package]
+authors = ["Andrei Basarab <andy.basarab@gmail.com>"]
+name = "sys-time"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rtic-monotonics = {version = "2.0.2", features = ["cortex-m-systick", "systick-64bit", "stm32f767zi"]}
+# TODO stm32f767zi parameter

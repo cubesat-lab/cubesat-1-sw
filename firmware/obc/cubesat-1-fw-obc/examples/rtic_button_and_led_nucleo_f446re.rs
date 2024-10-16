@@ -10,14 +10,12 @@ use nucleo_f446re::{
 };
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics_2::systick::prelude::*;
+use sys_time::prelude::*;
 use stm32f4xx_hal::prelude::*;
 
 #[app(device = stm32f4xx_hal::pac)]
 mod app {
     use super::*;
-
-    systick_monotonic!(Mono, 1_000);
 
     #[shared]
     struct Shared {
@@ -36,8 +34,8 @@ mod app {
         let cp = ctx.core;
         let dp = ctx.device;
 
-        // Initialize systick
-        Mono::start(cp.SYST, (180.MHz() as HertzU32).to_Hz());
+        // Initialize SysTime
+        SysTime::start(cp.SYST, (180.MHz() as HertzU32).to_Hz());
 
         // Set up the system clock. We want to run at 180 MHz for this one.
         let rcc = dp.RCC.constrain();
@@ -83,7 +81,7 @@ mod app {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[idle] time: {}",
-                        Mono::now().duration_since_epoch().to_millis()
+                        SysTime::now().duration_since_epoch().to_millis()
                     ));
                 });
             };

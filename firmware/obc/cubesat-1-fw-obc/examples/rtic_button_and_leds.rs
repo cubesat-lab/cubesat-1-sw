@@ -10,8 +10,7 @@ use nucleo_f767zi::{
 };
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics::systick::Systick;
-use rtic_monotonics::Monotonic;
+use sys_time::prelude::*;
 use stm32f7xx_hal::{
     gpio::{Edge, PinState},
     prelude::*,
@@ -57,9 +56,8 @@ mod app {
         let gpioc = dp.GPIOC.split();
         let gpiod = dp.GPIOD.split();
 
-        // Initialize systick
-        let systick_token = rtic_monotonics::create_systick_token!();
-        Systick::start(cp.SYST, (216.MHz() as HertzU32).to_Hz(), systick_token);
+        // Initialize SysTime
+        SysTime::start(cp.SYST, (216.MHz() as HertzU32).to_Hz());
 
         // Initialize LEDs
         let mut led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
@@ -112,7 +110,7 @@ mod app {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[idle] time: {}",
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             };
