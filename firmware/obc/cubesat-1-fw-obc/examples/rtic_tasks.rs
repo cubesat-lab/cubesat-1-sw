@@ -6,8 +6,8 @@ use fugit::HertzU32;
 use nucleo_f767zi::serial::{SerialParameters, SerialUartUsb};
 use panic_halt as _;
 use rtic::app;
-use sys_time::prelude::*;
 use stm32f7xx_hal::prelude::*;
+use sys_time::prelude::*;
 
 #[app(device = stm32f7xx_hal::pac, dispatchers = [TIM2, TIM3])]
 mod app {

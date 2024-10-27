@@ -10,8 +10,8 @@ use nucleo_f446re::{
 };
 use panic_halt as _;
 use rtic::app;
-use sys_time::prelude::*;
 use stm32f4xx_hal::prelude::*;
+use sys_time::prelude::*;
 
 #[app(device = stm32f4xx_hal::pac)]
 mod app {

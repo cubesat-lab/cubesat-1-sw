@@ -96,3 +96,9 @@ So whenever flashing a firmware, select the `--features`, `--target` (if needed)
     This example is for Linux (Ubuntu), debugging firmware on NUCLEO-F767ZI.
 
 - QEMU (todo)
+
+### Schematics
+
+- NUCLEO-F446RE with CC1101 module
+
+    ![NUCLEO-F446RE + E07-M1101D-SMA (CC1101)](./../../../docs/schematics/nucleo-f446re-cc1101.drawio.png)

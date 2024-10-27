@@ -41,6 +41,10 @@ impl Button {
         self.btn.clear_interrupt_pending_bit();
     }
 
+    pub fn check_interrupt(&mut self) -> bool {
+        self.btn.check_interrupt()
+    }
+
     pub fn get_debounce_period(&mut self) -> Duration<u64, 1, 1000> {
         self.debounce_period
     }

@@ -10,11 +10,11 @@ use nucleo_f767zi::{
 };
 use panic_halt as _;
 use rtic::app;
-use sys_time::prelude::*;
 use stm32f7xx_hal::{
     gpio::{Edge, PinState},
     prelude::*,
 };
+use sys_time::prelude::*;
 
 #[app(device = stm32f7xx_hal::pac)]
 mod app {
