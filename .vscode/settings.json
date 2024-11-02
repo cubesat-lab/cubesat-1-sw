@@ -1,5 +1,14 @@
 {
-    "rust-analyzer.linkedProjects": ["${workspaceFolder}/firmware/obc/cubesat-1-fw-obc/Cargo.toml"],
+    "rust-analyzer.cargo.features": "all",
     "rust-analyzer.cargo.target": "thumbv7em-none-eabihf",
     "rust-analyzer.checkOnSave": false,
+    "rust-analyzer.linkedProjects": [
+        "${workspaceFolder}/boards/nucleo-f446re/Cargo.toml",
+        "${workspaceFolder}/boards/nucleo-f767zi/Cargo.toml",
+        "${workspaceFolder}/boards/stm32vldiscovery/Cargo.toml",
+        "${workspaceFolder}/drivers/cc1101/Cargo.toml",
+        "${workspaceFolder}/firmware/obc/cubesat-1-fw-obc/Cargo.toml",
+        "${workspaceFolder}/modules/cc1101-wrapper/Cargo.toml",
+        "${workspaceFolder}/modules/sys-time/Cargo.toml",
+    ],
 }

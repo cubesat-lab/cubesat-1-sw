@@ -1,4 +1,3 @@
-use fugit::{Duration, Instant};
 use sys_time::prelude::*;
 use stm32f7xx_hal::{
     gpio::{Edge, ExtiPin, Input, Pin},
@@ -12,13 +11,13 @@ pub struct ButtonParameters<'a> {
     pub syscfg: &'a mut SYSCFG,
     pub exti: &'a mut EXTI,
     pub apb: &'a mut APB2,
-    pub debounce_period: Duration<u64, 1, 1000>,
+    pub debounce_period: TimeDuration,
 }
 
 pub struct Button {
     btn: Pin<'C', 13, Input>,
-    debounce_period: Duration<u64, 1, 1000>,
-    pub debounce_instant: Instant<u64, 1, 1000>,
+    debounce_period: TimeDuration,
+    pub debounce_instant: TimeInstant,
 }
 
 impl Button {
@@ -45,7 +44,7 @@ impl Button {
         self.btn.check_interrupt()
     }
 
-    pub fn get_debounce_period(&mut self) -> Duration<u64, 1, 1000> {
+    pub fn get_debounce_period(&mut self) -> TimeDuration {
         self.debounce_period
     }
 }

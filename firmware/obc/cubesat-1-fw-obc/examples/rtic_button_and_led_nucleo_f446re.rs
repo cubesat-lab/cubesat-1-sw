@@ -2,7 +2,6 @@
 #![no_std]
 
 use embedded_hal_1::digital::PinState;
-use fugit::HertzU32;
 use nucleo_f446re::{
     button::{Button, ButtonParameters, Edge},
     led::{LedGreen, LedParameters},
@@ -35,11 +34,11 @@ mod app {
         let dp = ctx.device;
 
         // Initialize SysTime
-        SysTime::start(cp.SYST, (180.MHz() as HertzU32).to_Hz());
+        SysTime::start(cp.SYST, FreqSize::MHz(180).to_Hz());
 
         // Set up the system clock. We want to run at 180 MHz for this one.
         let rcc = dp.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(180.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(FreqSize::MHz(180)).freeze();
 
         // Initialize GPIO Ports
         let gpioa = dp.GPIOA.split();
@@ -69,6 +68,7 @@ mod app {
             edge: Edge::Falling,
             syscfg: &mut syscfg,
             exti: &mut exti,
+            debounce_period: TimeSize::millis(150),
         });
 
         (Shared { serial }, Local { button, led_green })

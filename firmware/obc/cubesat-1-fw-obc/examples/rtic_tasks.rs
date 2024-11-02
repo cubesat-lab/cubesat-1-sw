@@ -2,7 +2,7 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use fugit::HertzU32;
+use cortex_m::asm::{nop, wfi};
 use nucleo_f767zi::serial::{SerialParameters, SerialUartUsb};
 use panic_halt as _;
 use rtic::app;
@@ -31,13 +31,13 @@ mod app {
 
         // Set up the system clock. We want to run at 216MHz for this one.
         let rcc = dp.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(FreqSize::MHz(216)).freeze();
 
         // Initialize GPIO Ports
         let gpiod = dp.GPIOD.split();
 
         // Initialize SysTime
-        SysTime::start(cp.SYST, (216.MHz() as HertzU32).to_Hz());
+        SysTime::start(cp.SYST, FreqSize::MHz(216).to_Hz());
 
         // Initialize UART for serial communication through USB
         let serial_parameters = SerialParameters {
@@ -60,7 +60,7 @@ mod app {
     async fn task_20ms(mut ctx: task_20ms::Context) {
         loop {
             let mut instant = SysTime::now();
-            instant += 20.millis();
+            instant += TimeSize::millis(20);
 
             let _10ms_task = {
                 // Lock shared "serial" resource. Use it in the critical section
@@ -81,7 +81,7 @@ mod app {
     async fn task_100ms(mut ctx: task_100ms::Context) {
         loop {
             let mut instant = SysTime::now();
-            instant += 100.millis();
+            instant += TimeSize::millis(100);
 
             let _100ms_task = {
                 // Lock shared "serial" resource. Use it in the critical section
@@ -113,10 +113,10 @@ mod app {
 
             // Perform a primitive delay (async delay is not permitted in idle task)
             for _ in 0..1_000 {
-                rtic::export::nop();
+                nop();
             }
 
-            rtic::export::wfi();
+            wfi();
         }
     }
 }

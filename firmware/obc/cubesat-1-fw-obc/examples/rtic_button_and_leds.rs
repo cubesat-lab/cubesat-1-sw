@@ -2,7 +2,6 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use fugit::HertzU32;
 use nucleo_f767zi::{
     button::{Button, ButtonParameters},
     led::{LedBlue, LedGreen, LedParameters, LedRed},
@@ -49,7 +48,7 @@ mod app {
 
         // Set up the system clock. We want to run at 216MHz for this one.
         let mut rcc = dp.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(FreqSize::MHz(216)).freeze();
 
         // Initialize GPIO Ports
         let gpiob = dp.GPIOB.split();
@@ -57,7 +56,7 @@ mod app {
         let gpiod = dp.GPIOD.split();
 
         // Initialize SysTime
-        SysTime::start(cp.SYST, (216.MHz() as HertzU32).to_Hz());
+        SysTime::start(cp.SYST, FreqSize::MHz(216).to_Hz());
 
         // Initialize LEDs
         let mut led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
@@ -89,6 +88,7 @@ mod app {
             syscfg: &mut syscfg,
             exti: &mut exti,
             apb: &mut rcc.apb2,
+            debounce_period: TimeSize::millis(150),
         });
 
         (

@@ -5,7 +5,6 @@ pub use cc1101::{
     NumPreamble, PacketLength, RadioMode, SyncMode, UserError, FIFO_SIZE_MAX,
 };
 use embedded_hal::{digital::PinState, spi::SpiDevice};
-use fugit::{Duration, Instant};
 use sys_time::prelude::*;
 
 pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX;
@@ -87,7 +86,7 @@ pub struct Cc1101Wrapper<SPI> {
     tx_data: DataBuffer,
     last_rx_rssi: i16,
     last_rx_lqi: u8,
-    timestamp_monitor: Instant<u64, 1, 1000>,
+    timestamp_monitor: TimeInstant,
     last_error: Option<Cc1101WrapperError>,
     error_count: u32,
 }
@@ -239,13 +238,13 @@ where
     // ---------------------------------------------------------------------------------
 
     async fn start_idle_state(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
+        let timeout = TimeSize::millis(10);
         let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
         self.process_native_result(result);
     }
 
     async fn start_rx_state(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
+        let timeout = TimeSize::millis(10);
         let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
         self.process_native_result(result);
     }
@@ -260,7 +259,7 @@ where
         // Start Rx
         self.start_rx_state().await;
 
-        match SysTime::timeout_after(fugit::ExtU64::millis(100), self.receive_polling()).await {
+        match SysTime::timeout_after(TimeSize::millis(100), self.receive_polling()).await {
             Ok(result) => match result {
                 Ok(state) => match state {
                     RxState::Received => {
@@ -297,7 +296,7 @@ where
     }
 
     async fn process_transmit(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
+        let timeout = TimeSize::millis(10);
 
         // Check if data is available for write
         if self.tx_data.ready {
@@ -336,7 +335,7 @@ where
             // Start Tx
             let result = self.set_radio_mode(RadioMode::Transmit, timeout).await;
             self.process_native_result(result);
-            SysTime::delay(fugit::ExtU64::millis(5)).await;
+            SysTime::delay(TimeSize::millis(5)).await;
 
             // Wait for Tx to finish and get the result
             let result = self.await_machine_state(MachineState::IDLE, timeout).await;
@@ -352,7 +351,7 @@ where
     }
 
     async fn monitor(&mut self) {
-        let period: Duration<u64, 1, 1000> = fugit::ExtU64::millis(1000);
+        let period = TimeDuration::millis(1000);
         let timestamp_now = SysTime::now();
 
         if (timestamp_now - self.timestamp_monitor) > period {
@@ -389,7 +388,7 @@ where
         loop {
             match rx_state {
                 RxState::Waiting => {
-                    SysTime::delay(fugit::ExtU64::millis(5)).await;
+                    SysTime::delay(TimeSize::millis(5)).await;
 
                     let packet_status = self.cc1101.get_packet_status()?;
                     if packet_status.sof_delimiter {
@@ -397,7 +396,7 @@ where
                     }
                 }
                 RxState::Receiving => {
-                    SysTime::delay(fugit::ExtU64::millis(1)).await;
+                    SysTime::delay(TimeSize::millis(1)).await;
 
                     let num_rxbytes = self.cc1101.get_rx_bytes()?;
                     if (num_rxbytes > 0) && (num_rxbytes == last_rxbytes) {
@@ -518,7 +517,7 @@ where
         &mut self,
         target_state: MachineState,
     ) -> Result<(), Cc1101WrapperError> {
-        let delay = fugit::ExtU64::micros(1000);
+        let delay = TimeSize::micros(1000);
         loop {
             let machine_state = self.cc1101.get_machine_state()?;
 
@@ -543,7 +542,7 @@ where
     async fn await_machine_state(
         &mut self,
         target_state: MachineState,
-        timeout: Duration<u64, 1, 1000>,
+        timeout: TimeDuration,
     ) -> Result<(), Cc1101WrapperError> {
         match SysTime::timeout_after(timeout, self.check_machine_state(target_state)).await {
             Ok(result) => result,
@@ -555,7 +554,7 @@ where
     async fn set_radio_mode(
         &mut self,
         radio_mode: RadioMode,
-        timeout: Duration<u64, 1, 1000>,
+        timeout: TimeDuration,
     ) -> Result<(), Cc1101WrapperError> {
         // Set "Idle" mode before going into any other mode
         self.cc1101.exit_rx_tx()?;

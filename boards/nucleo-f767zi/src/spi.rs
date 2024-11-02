@@ -1,5 +1,5 @@
 use embedded_hal::blocking::spi::{Transfer, Write};
-use fugit::RateExtU32;
+use sys_time::prelude::*;
 use stm32f7xx_hal::{
     gpio::{Alternate, Output, Pin},
     pac::{SPI3, SPI4},
@@ -78,7 +78,7 @@ where
                 polarity: spi::Polarity::IdleHigh,
                 phase: spi::Phase::CaptureOnSecondTransition,
             },
-            250_u32.kHz(),
+            FreqSize::kHz(250),
             clocks,
             apb,
         );

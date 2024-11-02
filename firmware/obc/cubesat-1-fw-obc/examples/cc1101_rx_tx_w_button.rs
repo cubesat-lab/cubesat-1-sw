@@ -2,7 +2,6 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use fugit::HertzU32;
 use panic_halt as _;
 use rtic::app;
 use sys_time::prelude::*;
@@ -61,7 +60,7 @@ mod nucleo_f767zi_board {
 
             // Set up the system clock. We want to run at 216MHz for this one.
             let mut rcc = dp.RCC.constrain();
-            let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
+            let clocks = rcc.cfgr.sysclk(FreqSize::MHz(216)).freeze();
             let mut syscfg = dp.SYSCFG;
             let mut exti = dp.EXTI;
 
@@ -71,7 +70,7 @@ mod nucleo_f767zi_board {
             let gpiod = dp.GPIOD.split();
 
             // Initialize SysTime
-            let sysclk = (216.MHz() as HertzU32).to_Hz();
+            let sysclk = FreqSize::MHz(216).to_Hz();
             SysTime::start(cp.SYST, sysclk);
 
             // Initialize LEDs
@@ -106,7 +105,7 @@ mod nucleo_f767zi_board {
                 syscfg: &mut syscfg,
                 exti: &mut exti,
                 apb: &mut rcc.apb2,
-                debounce_period: fugit::ExtU64::millis(150),
+                debounce_period: TimeSize::millis(150),
             });
 
             // Initialize CC1101 interrupt
@@ -148,7 +147,7 @@ mod nucleo_f767zi_board {
         async fn task_10ms(mut ctx: task_10ms::Context) {
             loop {
                 let mut instant = SysTime::now();
-                instant += 10.millis();
+                instant += TimeSize::millis(10);
 
                 let _task_10ms = {
                     // Do nothing
@@ -162,7 +161,7 @@ mod nucleo_f767zi_board {
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
             ctx.local.cc1101_wrp.init_config().unwrap();
 
-            SysTime::delay(100.millis().into()).await;
+            SysTime::delay(TimeSize::millis(100)).await;
 
             loop {
                 let _task_rf_com = {
@@ -240,7 +239,7 @@ mod nucleo_f767zi_board {
                     }
 
                     // Test Code: Simulate other activity
-                    SysTime::delay(10.millis().into()).await;
+                    SysTime::delay(TimeSize::millis(10)).await;
                 };
             }
         }

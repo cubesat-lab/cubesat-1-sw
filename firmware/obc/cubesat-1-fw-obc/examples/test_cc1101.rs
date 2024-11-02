@@ -9,6 +9,7 @@ use nucleo_f767zi::{
     led::{LedBlue, LedGreen, LedParameters, LedRed},
     serial::{SerialParameters, SerialUartUsb},
     spi::{SpiMaster3, SpiMaster4},
+    spi_adapter::SpiAdapter,
 };
 use panic_halt as _;
 use stm32f7xx_hal::{pac::Peripherals as Stm32F7Peripherals, prelude::*};
@@ -78,11 +79,11 @@ fn main() -> ! {
     );
 
     // Initialize CC1101 Wrapper - RF Device 1
-    let mut cc1101_wrp_1 = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
+    let mut cc1101_wrp_1 = Cc1101Wrapper::new(SpiAdapter::new(spi_3.spi, spi_3.cs));
     cc1101_wrp_1.init_config().unwrap();
 
     // Initialize CC1101 Wrapper - RF Device 2
-    let mut cc1101_wrp_2 = Cc1101Wrapper::new(spi_4.spi, spi_4.cs);
+    let mut cc1101_wrp_2 = Cc1101Wrapper::new(SpiAdapter::new(spi_4.spi, spi_4.cs));
     cc1101_wrp_2.init_config().unwrap();
 
     // Get HW Info from both RF Devices
@@ -109,18 +110,20 @@ fn main() -> ! {
 
         // TODO: This code below isn't functional - fix CC1101 driver and CC1101 Wrapper implementation
         // Transmit the packet
-        let mut dst = 0u8;
-        let mut buffer = [0, 1, 2, 3, 4, 5, 6, 7];
-        let _result = cc1101_wrp_1.transmit_packet(&mut dst, &mut buffer).unwrap();
+        let mut _dst = 0u8;
+        let mut _buffer = [0, 1, 2, 3, 4, 5, 6, 7];
+        // TODO Update the usage of Cc1101Wrapper
+        // let _result = cc1101_wrp_1.transmit_packet(&mut dst, &mut buffer).unwrap();
 
         delay.delay_us(10_000);
 
         // Attempt to read data on the radio
         // If read is succesful, send the packet via UART
-        let mut dst = 0u8;
-        let mut buffer = [0u8; 8];
-        if let Ok(_result) = cc1101_wrp_2.receive_packet(&mut dst, &mut buffer) {
-            serial.formatln(format_args!("Message: {:?}", buffer));
-        }
+        let mut _dst = 0u8;
+        let mut _buffer = [0u8; 8];
+        // TODO Update the usage of Cc1101Wrapper
+        // if let Ok(_result) = cc1101_wrp_2.receive_packet(&mut dst, &mut buffer) {
+        //     serial.formatln(format_args!("Message: {:?}", buffer));
+        // }
     }
 }
