@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(type_alias_impl_trait)]
 
 use panic_halt as _;
 use rtic::{app, Mutex};
@@ -30,8 +29,7 @@ mod nucleo_fxxxxx_board {
     use nucleo_f767zi::{
         button::{Button, ButtonParameters},
         event_pin::{EventPinCc1101Gdo2, EventPinParameters},
-        // led::{LedBlue, LedGreen, LedParameters, LedRed},
-        led::{LedGreen, LedParameters},
+        led::{LedBlue, LedGreen, LedParameters, LedRed},
         serial::{SerialParameters, SerialUartUsb},
         spi::SpiMaster3,
         spi_adapter::SpiAdapter,
@@ -50,8 +48,14 @@ mod nucleo_fxxxxx_board {
         use shared_resources::{
             button_int_signal_that_needs_to_be_locked, button_that_needs_to_be_locked,
             cc1101_int_signal_that_needs_to_be_locked, cc1101_int_that_needs_to_be_locked,
-            led_green_that_needs_to_be_locked, serial_that_needs_to_be_locked,
+            led_blue_that_needs_to_be_locked, led_green_that_needs_to_be_locked,
+            led_red_that_needs_to_be_locked, serial_that_needs_to_be_locked,
         };
+
+        #[cfg(feature = "nucleo-f446re-board")]
+        type LedBlue = ();
+        #[cfg(feature = "nucleo-f446re-board")]
+        type LedRed = ();
 
         #[cfg(feature = "nucleo-f767zi-board")]
         type SPI = Spi<
@@ -84,8 +88,8 @@ mod nucleo_fxxxxx_board {
             cc1101_int_signal: bool,
             button: Button,
             led_green: LedGreen,
-            // led_blue: LedBlue,
-            // led_red: LedRed,
+            led_blue: LedBlue,
+            led_red: LedRed,
             cc1101_int: EventPinCc1101Gdo2,
         }
 
@@ -130,8 +134,14 @@ mod nucleo_fxxxxx_board {
             #[cfg(feature = "nucleo-f767zi-board")]
             let pin_led_green = gpiob.pb0;
             let led_green = LedGreen::new(LedParameters { pin: pin_led_green });
-            // let led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
-            // let led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
+            #[cfg(feature = "nucleo-f446re-board")]
+            let led_blue = LedBlue::default();
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
+            #[cfg(feature = "nucleo-f446re-board")]
+            let led_red = LedRed::default();
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
 
             // Initialize UART for serial communication through USB
             #[cfg(feature = "nucleo-f446re-board")]
@@ -236,8 +246,8 @@ mod nucleo_fxxxxx_board {
                     cc1101_int_signal: false,
                     button,
                     led_green,
-                    // led_blue,
-                    // led_red,
+                    led_blue,
+                    led_red,
                     cc1101_int,
                 },
                 Local { cc1101_wrp },
@@ -370,6 +380,8 @@ mod nucleo_fxxxxx_board {
             mut cc1101_int: cc1101_int_that_needs_to_be_locked,
             mut cc1101_int_signal: cc1101_int_signal_that_needs_to_be_locked,
             mut led_green: led_green_that_needs_to_be_locked,
+            mut led_blue: led_blue_that_needs_to_be_locked,
+            mut led_red: led_red_that_needs_to_be_locked,
             mut serial: serial_that_needs_to_be_locked,
         ) {
             let mut known_interrupt_event: bool = false;
@@ -395,8 +407,18 @@ mod nucleo_fxxxxx_board {
                         led_green.lock(|led_green| {
                             led_green.toggle();
                         });
-                        // ctx.local.led_blue.toggle();
-                        // ctx.local.led_red.toggle();
+                        led_blue.lock(|led_blue| {
+                            #[cfg(feature = "nucleo-f446re-board")]
+                            let _ = led_blue;
+                            #[cfg(feature = "nucleo-f767zi-board")]
+                            led_blue.toggle();
+                        });
+                        led_red.lock(|led_red| {
+                            #[cfg(feature = "nucleo-f446re-board")]
+                            let _ = led_red;
+                            #[cfg(feature = "nucleo-f767zi-board")]
+                            led_red.toggle();
+                        });
 
                         // Lock shared "serial" resource. Use it in the critical section
                         serial.lock(|serial| {
@@ -445,7 +467,7 @@ mod nucleo_fxxxxx_board {
             }
         }
 
-        #[task(binds = EXTI0, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI0, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti0_isr(ctx: exti0_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -453,11 +475,13 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
 
-        #[task(binds = EXTI1, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI1, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti1_isr(ctx: exti1_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -465,11 +489,13 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
 
-        #[task(binds = EXTI2, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI2, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti2_isr(ctx: exti2_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -477,11 +503,13 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
 
-        #[task(binds = EXTI3, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI3, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti3_isr(ctx: exti3_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -489,11 +517,13 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
 
-        #[task(binds = EXTI4, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI4, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti4_isr(ctx: exti4_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -501,11 +531,13 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
 
-        #[task(binds = EXTI9_5, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI9_5, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti9_5_isr(ctx: exti9_5_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -513,12 +545,13 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
 
-        // #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[button_int_signal, serial])]
-        #[task(binds = EXTI15_10, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, serial])]
+        #[task(binds = EXTI15_10, shared=[button, button_int_signal, cc1101_int, cc1101_int_signal, led_green, led_blue, led_red, serial])]
         fn exti15_10_isr(ctx: exti15_10_isr::Context) {
             interrupt_router(
                 ctx.shared.button,
@@ -526,6 +559,8 @@ mod nucleo_fxxxxx_board {
                 ctx.shared.cc1101_int,
                 ctx.shared.cc1101_int_signal,
                 ctx.shared.led_green,
+                ctx.shared.led_blue,
+                ctx.shared.led_red,
                 ctx.shared.serial,
             );
         }
