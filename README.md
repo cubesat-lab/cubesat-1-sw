@@ -51,13 +51,28 @@ Build and Flash the Firmware
     ```bash
     cargo install cargo-generate
     ```
-- cargo-flash
-    ```bash
-    cargo install cargo-flash
-    ```
+- cargo-flash (see [here](https://probe.rs/docs/getting-started/installation/))
+    - Linux (Ubuntu 22.04) / macOS
+        ```bash
+        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
+        ```
+    - Windows
+        ```bash
+        irm https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.ps1 | iex
+        ```
 - ST-LINK USB driver (for Windows only)
 
     Download and install it from [here](https://www.st.com/en/development-tools/stsw-link009.html)
+
+- Git
+    - Setup SSH key and add to your GitHub account (if it's not already the case), see: [Generate new SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
+    - Repository & submodule setup
+        ```bash
+        cd <path>
+        git clone git@github.com:cubesat-lab/cubesat-1-sw.git
+        cd ./cubesat-1-sw
+        git submodule update --init --recursive
+        ```
 
 ### Complete
 

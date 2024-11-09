@@ -2,7 +2,7 @@ use embedded_hal::spi::{Error, ErrorKind, ErrorType, Operation, SpiDevice};
 use stm32f4xx_hal::{
     gpio::{alt::SpiCommon, Alternate, Output, Pin},
     // TODO: Make this module generic
-    // pac::SPI2,
+    pac::SPI2,
     rcc::Clocks,
     spi::{Error as Stm32F4SpiError, Instance, Mode, Phase, Polarity, Spi},
 };
@@ -40,8 +40,6 @@ impl Error for SpiError {
     }
 }
 
-pub type CS = Pin<'B', 4, Output>;
-
 pub struct SpiParameters<'a, SPI> {
     pub spi: SPI,
     pub clocks: &'a Clocks,
@@ -51,6 +49,8 @@ pub struct SpiParameters<'a, SPI> {
     pub pin_miso: Pin<'B', 14>,
     pub pin_mosi: Pin<'B', 15>,
 }
+
+pub type CS = Pin<'B', 4, Output>;
 
 pub struct SpiMaster<SPI: Instance> {
     pub spi: Spi<SPI>,
@@ -68,7 +68,10 @@ impl<SPI: Instance> SpiMaster<SPI> {
         <SPI as SpiCommon>::Miso: From<Pin<'B', 14, Alternate<5>>>,
         <SPI as SpiCommon>::Mosi: From<Pin<'B', 15, Alternate<5>>>,
     {
-        let cs = spi_parameters.pin_cs.into_push_pull_output();
+        let mut cs = spi_parameters.pin_cs.into_push_pull_output();
+
+        // Set nCS pin to high (disabled) initially
+        cs.set_high();
 
         // Initialize SPI
         let spi = Spi::new(
@@ -150,3 +153,4 @@ impl<SPI: Instance> SpiDevice for SpiMaster<SPI> {
 
 // TODO: Make this module generic
 // pub type SpiMaster2 = SpiMaster<SPI2, 'B', 4, 'B', 13, 5, 'B', 14, 5, 'B', 15, 5>;
+pub type SpiMaster2 = SpiMaster<SPI2>;

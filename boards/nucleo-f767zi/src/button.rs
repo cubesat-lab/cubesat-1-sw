@@ -1,9 +1,9 @@
-use sys_time::prelude::*;
 use stm32f7xx_hal::{
     gpio::{Edge, ExtiPin, Input, Pin},
     pac::{EXTI, SYSCFG},
     rcc::APB2,
 };
+use sys_time::prelude::*;
 
 pub struct ButtonParameters<'a> {
     pub pin: Pin<'C', 13>,

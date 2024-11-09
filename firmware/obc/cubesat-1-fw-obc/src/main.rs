@@ -11,35 +11,38 @@ mod nucleo_fxxxxx_board {
     use cc1101_wrapper::{Cc1101Wrapper, PACKET_LENGTH};
 
     #[cfg(feature = "nucleo-f446re-board")]
-    use nucleo_f446re::{
+    use stm32f4xx_hal as hal;
+    #[cfg(feature = "nucleo-f767zi-board")]
+    use stm32f7xx_hal as hal;
+
+    use hal::{
+        gpio::Edge,
+        pac::{self},
+        prelude::*,
+    };
+
+    #[cfg(feature = "nucleo-f446re-board")]
+    use hal::gpio::Pull;
+
+    #[cfg(feature = "nucleo-f446re-board")]
+    use nucleo_f446re as board;
+    #[cfg(feature = "nucleo-f767zi-board")]
+    use nucleo_f767zi as board;
+
+    use board::{
         button::{Button, ButtonParameters},
         event_pin::{EventPinCc1101Gdo2, EventPinParameters},
         led::{LedGreen, LedParameters},
         serial::{SerialParameters, SerialUartUsb},
-        spi::{SpiMaster, SpiParameters},
-    };
-    #[cfg(feature = "nucleo-f446re-board")]
-    use stm32f4xx_hal::{
-        gpio::{Edge, Pull},
-        pac::{self, SPI2},
-        prelude::*,
+        spi::SpiParameters,
     };
 
+    #[cfg(feature = "nucleo-f446re-board")]
+    use board::spi::SpiMaster2 as SpiCc1101;
     #[cfg(feature = "nucleo-f767zi-board")]
-    use nucleo_f767zi::{
-        button::{Button, ButtonParameters},
-        event_pin::{EventPinCc1101Gdo2, EventPinParameters},
-        led::{LedBlue, LedGreen, LedParameters, LedRed},
-        serial::{SerialParameters, SerialUartUsb},
-        spi::SpiMaster3,
-        spi_adapter::SpiAdapter,
-    };
-    #[cfg(feature = "nucleo-f767zi-board")]
-    use stm32f7xx_hal::{
-        gpio::{Alternate, Edge, Output, Pin},
-        pac::{self, SPI3},
-        prelude::*,
-        spi::{Enabled, Spi},
+    use board::{
+        led::{LedBlue, LedRed},
+        spi::SpiMaster3 as SpiCc1101,
     };
 
     #[app(device = pac, dispatchers = [TIM2, TIM3])]
@@ -56,25 +59,6 @@ mod nucleo_fxxxxx_board {
         type LedBlue = ();
         #[cfg(feature = "nucleo-f446re-board")]
         type LedRed = ();
-
-        #[cfg(feature = "nucleo-f767zi-board")]
-        type SPI = Spi<
-            SPI3,
-            (
-                Pin<'C', 10, Alternate<6>>,
-                Pin<'C', 11, Alternate<6>>,
-                Pin<'C', 12, Alternate<6>>,
-            ),
-            Enabled<u8>,
-        >;
-        #[cfg(feature = "nucleo-f767zi-board")]
-        type CS = Pin<'C', 9, Output>;
-
-        #[cfg(feature = "nucleo-f446re-board")]
-        type Cc1101GenericSpi = SpiMaster<SPI2>;
-
-        #[cfg(feature = "nucleo-f767zi-board")]
-        type Cc1101GenericSpi = SpiAdapter<SPI, CS>;
 
         #[cfg(feature = "nucleo-f446re-board")]
         const SYS_CLK: FreqSize = FreqSize::MHz(180);
@@ -95,7 +79,7 @@ mod nucleo_fxxxxx_board {
 
         #[local]
         struct Local {
-            cc1101_wrp: Cc1101Wrapper<Cc1101GenericSpi>,
+            cc1101_wrp: Cc1101Wrapper<SpiCc1101>,
         }
 
         #[init]
@@ -161,22 +145,6 @@ mod nucleo_fxxxxx_board {
             let mut serial = SerialUartUsb::new(serial_param);
             serial.println("Hello RTIC!");
 
-            // Initialize SPI3
-            // #[cfg(feature = "nucleo-f446re-board")]
-            // let spi_2 = SpiMaster2::new(
-            //     dp.SPI3, &clocks, gpioc.pc9, gpioc.pc10, gpioc.pc11, gpioc.pc12,
-            // );
-            #[cfg(feature = "nucleo-f767zi-board")]
-            let spi_3 = SpiMaster3::new(
-                dp.SPI3,
-                &clocks,
-                &mut rcc.apb1,
-                gpioc.pc9,
-                gpioc.pc10,
-                gpioc.pc11,
-                gpioc.pc12,
-            );
-
             // Initialize User Button
             #[cfg(feature = "nucleo-f446re-board")]
             let button_param = ButtonParameters {
@@ -216,7 +184,18 @@ mod nucleo_fxxxxx_board {
             };
             let cc1101_int = EventPinCc1101Gdo2::new(event_pin_gdo_2);
 
-            // Initialize CC1101 Wrapper - RF Transceiver
+            // Initialize Spi
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let spi_param = SpiParameters {
+                spi: dp.SPI3,
+                clocks: &clocks,
+                freq: FreqSize::kHz(250),
+                apb: &mut rcc.apb1,
+                pin_cs: gpioc.pc9,
+                pin_sck: gpioc.pc10,
+                pin_miso: gpioc.pc11,
+                pin_mosi: gpioc.pc12,
+            };
             #[cfg(feature = "nucleo-f446re-board")]
             let spi_param = SpiParameters {
                 spi: dp.SPI2,
@@ -227,12 +206,10 @@ mod nucleo_fxxxxx_board {
                 pin_miso: gpiob.pb14,
                 pin_mosi: gpiob.pb15,
             };
-            #[cfg(feature = "nucleo-f446re-board")]
-            let spi_master_2 = SpiMaster::new(spi_param);
-            #[cfg(feature = "nucleo-f446re-board")]
-            let cc1101_wrp = Cc1101Wrapper::new(spi_master_2);
-            #[cfg(feature = "nucleo-f767zi-board")]
-            let cc1101_wrp = Cc1101Wrapper::new(SpiAdapter::new(spi_3.spi, spi_3.cs));
+            let spi_cc1101 = SpiCc1101::new(spi_param);
+
+            // Initialize CC1101 Wrapper - RF Transceiver
+            let cc1101_wrp = Cc1101Wrapper::new(spi_cc1101);
 
             // Spawn tasks
             task_10ms::spawn().ok();
@@ -599,7 +576,7 @@ mod stm32vldiscovery_board {
             let cp = ctx.core;
             let dp = ctx.device;
 
-            // Set up the system clock. We want to run at 216MHz for this one.
+            // Set up the system clock. We want to run at 24MHz for this one.
             let rcc = dp.RCC.constrain();
             let mut flash = dp.FLASH.constrain();
             let clocks = rcc.cfgr.freeze(&mut flash.acr);
