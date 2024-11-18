@@ -88,7 +88,7 @@ mod nucleo_fxxxxx_board {
             let cp = ctx.core;
             let dp = ctx.device;
 
-            // Set up the system clock. We want to run at 216MHz for this one.
+            // Set up the system clock
             #[cfg(feature = "nucleo-f446re-board")]
             let rcc = dp.RCC.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]

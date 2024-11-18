@@ -2,12 +2,13 @@
 
 pub use cc1101::{
     AddressFilter, AutoCalibration, Cc1101, CcaMode, Error, GdoCfg, MachineState, ModulationFormat,
-    NumPreamble, PacketLength, RadioMode, SyncMode, UserError, FIFO_SIZE_MAX,
+    NumPreamble, PacketLength, RadioMode, RxOffMode, SyncMode, UserError, FIFO_SIZE_MAX,
+    PACKET_STATUS_BYTES,
 };
 use embedded_hal::{digital::PinState, spi::SpiDevice};
 use sys_time::prelude::*;
 
-pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX;
+pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX - PACKET_STATUS_BYTES;
 
 enum RxState {
     Waiting,
@@ -30,6 +31,8 @@ pub enum Cc1101WrapperError {
     TxUnderflow,
     /// The RX FIFO buffer overflowed, too small buffer for configured packet length.
     RxOverflow,
+    /// RX FIFO is empty
+    RxFifoEmpty,
     /// Corrupt packet received with invalid CRC.
     CrcMismatch,
     /// Invalid state read from MARCSTATE register
@@ -137,9 +140,10 @@ where
         self.cc1101.set_address_filter(AddressFilter::Disabled)?;
         self.cc1101.crc_enable(true)?;
         self.cc1101.crc_autoflush_enable(true)?;
-        self.cc1101.append_status_enable(false)?;
+        self.cc1101.append_status_enable(true)?;
         self.cc1101.white_data_enable(false)?;
         self.cc1101.set_cca_mode(CcaMode::CciAlways)?;
+        self.cc1101.set_rxoff_mode(RxOffMode::StayInRx)?;
         self.cc1101.set_autocalibration(AutoCalibration::FromIdle)?;
         self.cc1101.set_gdo2_active_state(PinState::Low)?;
         self.cc1101.set_gdo2_config(GdoCfg::CRC_OK)?;
@@ -262,9 +266,7 @@ where
         match SysTime::timeout_after(TimeSize::millis(100), self.receive_polling()).await {
             Ok(result) => match result {
                 Ok(state) => match state {
-                    RxState::Received => {
-                        self.rx_data.ready = true;
-                    }
+                    RxState::Received => { /* Ok */ }
                     _ => { /* Unreachable statement */ }
                 },
                 Err(error) => {
@@ -354,6 +356,7 @@ where
         let period = TimeDuration::millis(1000);
         let timestamp_now = SysTime::now();
 
+        // Perform Monitoring activity every 1 s
         if (timestamp_now - self.timestamp_monitor) > period {
             self.timestamp_monitor = timestamp_now;
 
@@ -417,25 +420,25 @@ where
                 RxState::Received => {
                     let mut length: Option<u8> = None;
                     let mut address: Option<u8> = None;
-                    let mut rssi: Option<i16> = None;
-                    let mut lqi: Option<u8> = None;
+                    let mut rssi: Option<i16> = Some(0);
+                    let mut lqi: Option<u8> = Some(0);
+                    let data_length = last_rxbytes - PACKET_STATUS_BYTES;
 
                     self.cc1101.read_data(
                         &mut length,
                         &mut address,
                         &mut rssi,
                         &mut lqi,
-                        &mut self.rx_data.data[0..(last_rxbytes as usize)],
+                        &mut self.rx_data.data[0..(data_length as usize)],
                     )?;
 
                     // Store received data
-                    self.rx_data.length = last_rxbytes; // Fixed Length?
-
-                    // self.rx_data.length = length.unwrap() - 1; // Minus address byte
-                    // self.rx_data.address = address.unwrap();
+                    self.rx_data.ready = true;
+                    self.rx_data.length = data_length;
                     self.rx_data.address = 0;
-                    self.last_rx_rssi = self.cc1101.get_rssi_dbm()?;
-                    self.last_rx_lqi = self.cc1101.get_lqi()?;
+
+                    self.last_rx_rssi = rssi.unwrap();
+                    self.last_rx_lqi = lqi.unwrap();
                     break;
                 }
                 RxState::Error => {
@@ -450,30 +453,34 @@ where
     fn receive_interrupt(&mut self) -> Result<(), Cc1101WrapperError> {
         let mut length: Option<u8> = None;
         let mut address: Option<u8> = None;
-        let mut rssi: Option<i16> = None;
-        let mut lqi: Option<u8> = None;
+        let mut rssi: Option<i16> = Some(0);
+        let mut lqi: Option<u8> = Some(0);
+
+        // NOTE: We don't check here the CRC using `get_packet_status` because the GDO2
+        // interrupt is already configured to assert when a packet has been received with CRC OK.
 
         let rxbytes = self.cc1101.get_rx_bytes()?;
-        let packet_status = self.cc1101.get_packet_status()?;
 
-        if packet_status.crc_ok {
+        if rxbytes > 0 {
+            let data_length = rxbytes - PACKET_STATUS_BYTES;
+
             self.cc1101.read_data(
                 &mut length,
                 &mut address,
                 &mut rssi,
                 &mut lqi,
-                &mut self.rx_data.data[0..(rxbytes as usize)],
+                &mut self.rx_data.data[0..(data_length as usize)],
             )?;
 
             // Store received data
             self.rx_data.ready = true;
-            self.rx_data.length = rxbytes;
+            self.rx_data.length = data_length;
             self.rx_data.address = 0;
 
-            self.last_rx_rssi = self.cc1101.get_rssi_dbm()?;
-            self.last_rx_lqi = self.cc1101.get_lqi()?;
+            self.last_rx_rssi = rssi.unwrap();
+            self.last_rx_lqi = lqi.unwrap();
         } else {
-            return Err(Cc1101WrapperError::CrcMismatch);
+            return Err(Cc1101WrapperError::RxFifoEmpty);
         }
 
         Ok(())
