@@ -88,7 +88,7 @@ fn main() -> ! {
     loop {
         free(|cs| {
             // Wait for the interrupt signal from the Button
-            if false == SIGNAL.borrow(cs).get() {
+            if !SIGNAL.borrow(cs).get() {
                 // Perform actions on the Button push event
                 match led_state {
                     LedState::Red => {

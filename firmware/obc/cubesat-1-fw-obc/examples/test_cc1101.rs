@@ -8,11 +8,11 @@ use cortex_m_semihosting::hprintln;
 use nucleo_f767zi::{
     led::{LedBlue, LedGreen, LedParameters, LedRed},
     serial::{SerialParameters, SerialUartUsb},
-    spi::{SpiMaster3, SpiMaster4},
-    spi_adapter::SpiAdapter,
+    spi::{SpiMaster3, SpiMaster4, SpiParameters},
 };
 use panic_halt as _;
 use stm32f7xx_hal::{pac::Peripherals as Stm32F7Peripherals, prelude::*};
+use sys_time::prelude::*;
 
 static USE_GDB: bool = false;
 
@@ -57,33 +57,35 @@ fn main() -> ! {
     let mut serial = SerialUartUsb::new(serial_parameters);
 
     // Initialize SPI3
-    let spi_3 = SpiMaster3::new(
-        pac.SPI3,
-        &clocks,
-        &mut rcc.apb1,
-        gpioc.pc9,
-        gpioc.pc10,
-        gpioc.pc11,
-        gpioc.pc12,
-    );
+    let spi_3 = SpiMaster3::new(SpiParameters {
+        spi: pac.SPI3,
+        clocks: &clocks,
+        freq: FreqSize::MHz(216),
+        apb: &mut rcc.apb1,
+        pin_cs: gpioc.pc9,
+        pin_sck: gpioc.pc10,
+        pin_miso: gpioc.pc11,
+        pin_mosi: gpioc.pc12,
+    });
 
     // Initialize SPI4
-    let spi_4 = SpiMaster4::new(
-        pac.SPI4,
-        &clocks,
-        &mut rcc.apb2,
-        gpioe.pe4,
-        gpioe.pe2,
-        gpioe.pe5,
-        gpioe.pe6,
-    );
+    let spi_4 = SpiMaster4::new(SpiParameters {
+        spi: pac.SPI4,
+        clocks: &clocks,
+        freq: FreqSize::MHz(216),
+        apb: &mut rcc.apb2,
+        pin_cs: gpioe.pe4,
+        pin_sck: gpioe.pe2,
+        pin_miso: gpioe.pe5,
+        pin_mosi: gpioe.pe6,
+    });
 
     // Initialize CC1101 Wrapper - RF Device 1
-    let mut cc1101_wrp_1 = Cc1101Wrapper::new(SpiAdapter::new(spi_3.spi, spi_3.cs));
+    let mut cc1101_wrp_1 = Cc1101Wrapper::new(spi_3);
     cc1101_wrp_1.init_config().unwrap();
 
     // Initialize CC1101 Wrapper - RF Device 2
-    let mut cc1101_wrp_2 = Cc1101Wrapper::new(SpiAdapter::new(spi_4.spi, spi_4.cs));
+    let mut cc1101_wrp_2 = Cc1101Wrapper::new(spi_4);
     cc1101_wrp_2.init_config().unwrap();
 
     // Get HW Info from both RF Devices

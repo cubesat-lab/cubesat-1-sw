@@ -77,7 +77,8 @@ mod app {
     #[idle(shared = [serial])]
     fn idle(mut ctx: idle::Context) -> ! {
         loop {
-            let _idle_task = {
+            // Idle Task
+            {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[idle] time: {}",
