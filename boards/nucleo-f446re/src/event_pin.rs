@@ -1,15 +1,16 @@
-use stm32f7xx_hal::{
-    gpio::{Edge, ExtiPin, Input, Pin},
-    pac::{EXTI, SYSCFG},
-    rcc::APB2,
+pub use stm32f4xx_hal::gpio::Edge;
+use stm32f4xx_hal::{
+    gpio::{ExtiPin, Input, Pin, Pull},
+    pac::EXTI,
+    syscfg::SysCfg,
 };
 
 pub struct EventPinParameters<'a, const P: char, const N: u8> {
     pub pin: Pin<P, N>,
     pub edge: Edge,
-    pub syscfg: &'a mut SYSCFG,
+    pub pull: Pull,
+    pub syscfg: &'a mut SysCfg,
     pub exti: &'a mut EXTI,
-    pub apb: &'a mut APB2,
 }
 
 pub struct EventPin<const P: char, const N: u8> {
@@ -18,10 +19,10 @@ pub struct EventPin<const P: char, const N: u8> {
 
 impl<const P: char, const N: u8> EventPin<P, N> {
     pub fn new(event_pin_parameters: EventPinParameters<P, N>) -> Self {
-        let mut pin = event_pin_parameters.pin.into_floating_input();
+        let mut pin = Input::new(event_pin_parameters.pin, event_pin_parameters.pull);
 
         // Enable external interrupt on the pin
-        pin.make_interrupt_source(event_pin_parameters.syscfg, event_pin_parameters.apb);
+        pin.make_interrupt_source(event_pin_parameters.syscfg);
         pin.trigger_on_edge(event_pin_parameters.exti, event_pin_parameters.edge);
         pin.enable_interrupt(event_pin_parameters.exti);
 
@@ -37,4 +38,4 @@ impl<const P: char, const N: u8> EventPin<P, N> {
     }
 }
 
-pub type EventPinCc1101Gdo2 = EventPin<'D', 2>;
+pub type EventPinCc1101Gdo2 = EventPin<'B', 5>;

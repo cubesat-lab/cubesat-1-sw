@@ -2,13 +2,12 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use fugit::HertzU32;
+use cortex_m::asm::{nop, wfi};
 use nucleo_f767zi::serial::{SerialParameters, SerialUartUsb};
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics::systick::Systick;
-use rtic_monotonics::Monotonic;
 use stm32f7xx_hal::prelude::*;
+use sys_time::prelude::*;
 
 #[app(device = stm32f7xx_hal::pac, dispatchers = [TIM2, TIM3])]
 mod app {
@@ -32,14 +31,13 @@ mod app {
 
         // Set up the system clock. We want to run at 216MHz for this one.
         let rcc = dp.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(FreqSize::MHz(216)).freeze();
 
         // Initialize GPIO Ports
         let gpiod = dp.GPIOD.split();
 
-        // Initialize systick
-        let systick_token = rtic_monotonics::create_systick_token!();
-        Systick::start(cp.SYST, (216.MHz() as HertzU32).to_Hz(), systick_token);
+        // Initialize SysTime
+        SysTime::start(cp.SYST, FreqSize::MHz(216).to_Hz());
 
         // Initialize UART for serial communication through USB
         let serial_parameters = SerialParameters {
@@ -61,8 +59,8 @@ mod app {
     #[task(priority = 2, shared = [serial])]
     async fn task_20ms(mut ctx: task_20ms::Context) {
         loop {
-            let mut instant = Systick::now();
-            instant += 20.millis();
+            let mut instant = SysTime::now();
+            instant += TimeSize::millis(20);
 
             let _10ms_task = {
                 // Lock shared "serial" resource. Use it in the critical section
@@ -70,20 +68,20 @@ mod app {
                     serial.formatln(format_args!(
                         "{}[task_20ms] time: {}",
                         TAB,
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             };
 
-            Systick::delay_until(instant).await;
+            SysTime::delay_until(instant).await;
         }
     }
 
     #[task(priority = 1, shared = [serial])]
     async fn task_100ms(mut ctx: task_100ms::Context) {
         loop {
-            let mut instant = Systick::now();
-            instant += 100.millis();
+            let mut instant = SysTime::now();
+            instant += TimeSize::millis(100);
 
             let _100ms_task = {
                 // Lock shared "serial" resource. Use it in the critical section
@@ -92,12 +90,12 @@ mod app {
                         "{}{}[task_100ms] time: {}",
                         TAB,
                         TAB,
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             };
 
-            Systick::delay_until(instant).await;
+            SysTime::delay_until(instant).await;
         }
     }
 
@@ -108,17 +106,17 @@ mod app {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[idle] time: {}",
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             };
 
             // Perform a primitive delay (async delay is not permitted in idle task)
             for _ in 0..1_000 {
-                rtic::export::nop();
+                nop();
             }
 
-            rtic::export::wfi();
+            wfi();
         }
     }
 }

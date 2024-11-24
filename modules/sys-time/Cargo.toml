@@ -1,0 +1,15 @@
+[package]
+authors = ["Andrei Basarab <andy.basarab@gmail.com>"]
+name = "sys-time"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rtic-monotonics = { version = "2.0.2", default-features = false }
+
+[features]
+cortex-m-systick = ["rtic-monotonics/cortex-m-systick"]
+systick-64bit = ["rtic-monotonics/systick-64bit"]
+stm32f767zi = ["rtic-monotonics/stm32f767zi"]
+stm32f446re = ["rtic-monotonics/stm32f446re"]
+stm32f100rb = ["rtic-monotonics/stm32f100rb"]

@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "Debug main app",
             "type": "cppdbg",
             "request": "launch",
             "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}",
@@ -20,16 +20,49 @@
                 "exceptions": false
             },
             "MIMode": "gdb",
-            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerPath": "${input:os}",
             "debugServerPath": "openocd",
-            "debugServerArgs": "-f ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/openocd.cfg",
+            "debugServerArgs": "-f ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/${input:openocd}",
             "targetArchitecture": "arm",
-            "program": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/target/thumbv7em-none-eabihf/debug/cubesat-1-fw-${input:fw}",
+            "program": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/target/${input:target}/debug/cubesat-1-fw-${input:fw}",
             "stopAtEntry": true,
             "setupCommands": [
                 { "text": "-environment-cd ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}" },
                 { "text": "-target-select remote localhost:3333", "description": "connect to target"},
-                { "text": "-file-exec-and-symbols target/thumbv7em-none-eabihf/debug/cubesat-1-fw-${input:fw}", "description": "load file"},
+                { "text": "-file-exec-and-symbols target/${input:target}/debug/cubesat-1-fw-${input:fw}", "description": "load file"},
+                { "text": "-interpreter-exec console \"set print asm-demangle on\""},
+                { "text": "-interpreter-exec console \"monitor reset\""},
+                { "text": "-interpreter-exec console \"monitor halt\""},
+                { "text": "-interpreter-exec console \"monitor arm semihosting enable\""},
+                { "text": "-target-download", "description": "flash target"}
+            ],
+        },
+        {
+            "name": "Debug example",
+            "type": "cppdbg",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}",
+            "externalConsole": false,
+            "filterStderr": true,
+            "filterStdout": false,
+            "logging": {
+                "moduleLoad": true,
+                "trace": true,
+                "engineLogging": true,
+                "programOutput": true,
+                "exceptions": false
+            },
+            "MIMode": "gdb",
+            "miDebuggerPath": "${input:os}",
+            "debugServerPath": "openocd",
+            "debugServerArgs": "-f ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/${input:openocd}",
+            "targetArchitecture": "arm",
+            "program": "${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}/target/${input:target}/debug/examples/${input:example}",
+            "stopAtEntry": true,
+            "setupCommands": [
+                { "text": "-environment-cd ${workspaceFolder}/firmware/${input:fw}/cubesat-1-fw-${input:fw}" },
+                { "text": "-target-select remote localhost:3333", "description": "connect to target"},
+                { "text": "-file-exec-and-symbols target/${input:target}/debug/examples/${input:example}", "description": "load file"},
                 { "text": "-interpreter-exec console \"set print asm-demangle on\""},
                 { "text": "-interpreter-exec console \"monitor reset\""},
                 { "text": "-interpreter-exec console \"monitor halt\""},
@@ -48,6 +81,64 @@
                 {"label": "COM", "value": "com"},
                 {"label": "EPS", "value": "eps"},
                 {"label": "OBC", "value": "obc"},
+            ]
+        },
+        {
+            "id": "target",
+            "type": "pickString",
+            "description": "Which Board? (target arch)",
+            "options": [
+                {"label": "NUCLEO-F446RE", "value": "thumbv7em-none-eabihf"},
+                {"label": "NUCLEO-F767ZI", "value": "thumbv7em-none-eabihf"},
+                {"label": "STM32VLDISCOVERY", "value": "thumbv7m-none-eabi"},
+            ]
+        },
+        {
+            "id": "openocd",
+            "type": "pickString",
+            "description": "Which Board? (openocd)",
+            "options": [
+                {"label": "NUCLEO-F446RE", "value": "openocd_stm32f4xx.cfg"},
+                {"label": "NUCLEO-F767ZI", "value": "openocd_stm32f7xx.cfg"},
+                {"label": "STM32VLDISCOVERY", "value": "todo"},
+            ]
+        },
+        {
+            "id": "board",
+            "type": "pickString",
+            "description": "Which Board?",
+            "options": [
+                {"label": "NUCLEO-F446RE", "value": "nucleo-f446re"},
+                {"label": "NUCLEO-F767ZI", "value": "nucleo-f767zi"},
+                {"label": "STM32VLDISCOVERY", "value": "stm32vldiscovery"},
+            ]
+        },
+        {
+            "id": "os",
+            "type": "pickString",
+            "description": "Which OS? (gdb executable)",
+            "options": [
+                {"label": "Windows", "value": "arm-none-eabi-gdb"},
+                {"label": "Linux", "value": "gdb-multiarch"},
+            ]
+        },
+        {
+            "id": "example",
+            "type": "pickString",
+            "description": "Which example? (name)",
+            "options": [
+                {"value": "serial_nucleo_f446re"},
+                {"value": "button_and_leds"},
+                {"value": "cc1101_rx_tx_w_button"},
+                {"value": "hello_cubesat"},
+                {"value": "hello_stm32vldiscovery"},
+                {"value": "rtic_button_and_led_nucleo_f446re"},
+                {"value": "rtic_button_and_leds"},
+                {"value": "rtic_tasks"},
+                {"value": "serial_nucleo_f446re"},
+                {"value": "serial_stm32vldiscovery"},
+                {"value": "temp_on_serial"},
+                {"value": "test_cc1101"},
             ]
         },
     ]

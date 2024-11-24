@@ -1,16 +1,16 @@
-use stm32f7xx_hal::{
-    gpio::{Edge, ExtiPin, Input, Pin},
-    pac::{EXTI, SYSCFG},
-    rcc::APB2,
+pub use stm32f4xx_hal::gpio::Edge;
+use stm32f4xx_hal::{
+    gpio::{ExtiPin, Input, Pin, Pull},
+    pac::EXTI,
+    syscfg::SysCfg,
 };
 use sys_time::prelude::*;
 
 pub struct ButtonParameters<'a> {
     pub pin: Pin<'C', 13>,
     pub edge: Edge,
-    pub syscfg: &'a mut SYSCFG,
+    pub syscfg: &'a mut SysCfg,
     pub exti: &'a mut EXTI,
-    pub apb: &'a mut APB2,
     pub debounce_period: TimeDuration,
 }
 
@@ -22,10 +22,10 @@ pub struct Button {
 
 impl Button {
     pub fn new(button_parameters: ButtonParameters) -> Self {
-        let mut button = button_parameters.pin.into_floating_input();
+        let mut button = Input::new(button_parameters.pin, Pull::Up);
 
         // Enable external interrupt on PC13
-        button.make_interrupt_source(button_parameters.syscfg, button_parameters.apb);
+        button.make_interrupt_source(button_parameters.syscfg);
         button.trigger_on_edge(button_parameters.exti, button_parameters.edge);
         button.enable_interrupt(button_parameters.exti);
 

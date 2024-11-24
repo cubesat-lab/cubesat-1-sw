@@ -2,7 +2,6 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use fugit::HertzU32;
 use nucleo_f767zi::{
     button::{Button, ButtonParameters},
     led::{LedBlue, LedGreen, LedParameters, LedRed},
@@ -10,12 +9,11 @@ use nucleo_f767zi::{
 };
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics::systick::Systick;
-use rtic_monotonics::Monotonic;
 use stm32f7xx_hal::{
     gpio::{Edge, PinState},
     prelude::*,
 };
+use sys_time::prelude::*;
 
 #[app(device = stm32f7xx_hal::pac)]
 mod app {
@@ -50,16 +48,15 @@ mod app {
 
         // Set up the system clock. We want to run at 216MHz for this one.
         let mut rcc = dp.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
+        let clocks = rcc.cfgr.sysclk(FreqSize::MHz(216)).freeze();
 
         // Initialize GPIO Ports
         let gpiob = dp.GPIOB.split();
         let gpioc = dp.GPIOC.split();
         let gpiod = dp.GPIOD.split();
 
-        // Initialize systick
-        let systick_token = rtic_monotonics::create_systick_token!();
-        Systick::start(cp.SYST, (216.MHz() as HertzU32).to_Hz(), systick_token);
+        // Initialize SysTime
+        SysTime::start(cp.SYST, FreqSize::MHz(216).to_Hz());
 
         // Initialize LEDs
         let mut led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
@@ -91,6 +88,7 @@ mod app {
             syscfg: &mut syscfg,
             exti: &mut exti,
             apb: &mut rcc.apb2,
+            debounce_period: TimeSize::millis(150),
         });
 
         (
@@ -112,7 +110,7 @@ mod app {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[idle] time: {}",
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             };

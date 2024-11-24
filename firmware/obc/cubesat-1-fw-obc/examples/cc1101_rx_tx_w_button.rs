@@ -2,10 +2,9 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-use fugit::HertzU32;
 use panic_halt as _;
 use rtic::app;
-use rtic_monotonics::{systick::Systick, Monotonic};
+use sys_time::prelude::*;
 
 mod nucleo_f767zi_board {
     use super::*;
@@ -15,26 +14,13 @@ mod nucleo_f767zi_board {
         event_pin::{EventPinCc1101Gdo2, EventPinParameters},
         led::{LedBlue, LedGreen, LedParameters, LedRed},
         serial::{SerialParameters, SerialUartUsb},
-        spi::SpiMaster3,
-        spi_adapter::SpiAdapter,
+        spi::{SpiMaster3 as SpiCc1101, SpiParameters},
     };
     use stm32f7xx_hal::{gpio::Edge, pac, prelude::*};
 
     #[app(device = pac, dispatchers = [TIM2, TIM3])]
     mod app {
         use super::*;
-
-        type SPI = stm32f7xx_hal::spi::Spi<
-            stm32f7xx_hal::pac::SPI3,
-            (
-                stm32f7xx_hal::gpio::Pin<'C', 10, stm32f7xx_hal::gpio::Alternate<6>>,
-                stm32f7xx_hal::gpio::Pin<'C', 11, stm32f7xx_hal::gpio::Alternate<6>>,
-                stm32f7xx_hal::gpio::Pin<'C', 12, stm32f7xx_hal::gpio::Alternate<6>>,
-            ),
-            stm32f7xx_hal::spi::Enabled<u8>,
-        >;
-        type CS = stm32f7xx_hal::gpio::Pin<'C', 9, stm32f7xx_hal::gpio::Output>;
-        type Cc1101SpiAdapter = SpiAdapter<SPI, CS>;
 
         #[shared]
         struct Shared {
@@ -50,7 +36,7 @@ mod nucleo_f767zi_board {
             led_blue: LedBlue,
             led_red: LedRed,
             cc1101_int: EventPinCc1101Gdo2,
-            cc1101_wrp: Cc1101Wrapper<Cc1101SpiAdapter>,
+            cc1101_wrp: Cc1101Wrapper<SpiCc1101>,
         }
 
         #[init]
@@ -61,7 +47,7 @@ mod nucleo_f767zi_board {
 
             // Set up the system clock. We want to run at 216MHz for this one.
             let mut rcc = dp.RCC.constrain();
-            let clocks = rcc.cfgr.sysclk(216.MHz()).freeze();
+            let clocks = rcc.cfgr.sysclk(FreqSize::MHz(216)).freeze();
             let mut syscfg = dp.SYSCFG;
             let mut exti = dp.EXTI;
 
@@ -70,10 +56,9 @@ mod nucleo_f767zi_board {
             let gpioc = dp.GPIOC.split();
             let gpiod = dp.GPIOD.split();
 
-            // Initialize systick
-            let sysclk = (216.MHz() as HertzU32).to_Hz();
-            let systick_token = rtic_monotonics::create_systick_token!();
-            Systick::start(cp.SYST, sysclk, systick_token);
+            // Initialize SysTime
+            let sysclk = FreqSize::MHz(216).to_Hz();
+            SysTime::start(cp.SYST, sysclk);
 
             // Initialize LEDs
             let led_green = LedGreen::new(LedParameters { pin: gpiob.pb0 });
@@ -90,15 +75,16 @@ mod nucleo_f767zi_board {
             serial.println("Hello RTIC!");
 
             // Initialize SPI3
-            let spi_3 = SpiMaster3::new(
-                dp.SPI3,
-                &clocks,
-                &mut rcc.apb1,
-                gpioc.pc9,
-                gpioc.pc10,
-                gpioc.pc11,
-                gpioc.pc12,
-            );
+            let spi_3 = SpiCc1101::new(SpiParameters {
+                spi: dp.SPI3,
+                clocks: &clocks,
+                freq: FreqSize::MHz(216),
+                apb: &mut rcc.apb1,
+                pin_cs: gpioc.pc9,
+                pin_sck: gpioc.pc10,
+                pin_miso: gpioc.pc11,
+                pin_mosi: gpioc.pc12,
+            });
 
             // Initialize User Button
             let button = Button::new(ButtonParameters {
@@ -107,7 +93,7 @@ mod nucleo_f767zi_board {
                 syscfg: &mut syscfg,
                 exti: &mut exti,
                 apb: &mut rcc.apb2,
-                debounce_period: fugit::ExtU64::millis(150),
+                debounce_period: TimeSize::millis(150),
             });
 
             // Initialize CC1101 interrupt
@@ -120,7 +106,7 @@ mod nucleo_f767zi_board {
             });
 
             // Initialize CC1101 Wrapper - RF Transceiver
-            let cc1101_wrp = Cc1101Wrapper::new(SpiAdapter::new(spi_3.spi, spi_3.cs));
+            let cc1101_wrp = Cc1101Wrapper::new(spi_3);
 
             // Spawn tasks
             task_10ms::spawn().ok();
@@ -148,14 +134,15 @@ mod nucleo_f767zi_board {
         #[task(priority = 1, shared = [serial])]
         async fn task_10ms(mut ctx: task_10ms::Context) {
             loop {
-                let mut instant = Systick::now();
-                instant += 10.millis();
+                let mut instant = SysTime::now();
+                instant += TimeSize::millis(10);
 
-                let _task_10ms = {
+                // 10 ms Task
+                {
                     // Do nothing
                 };
 
-                Systick::delay_until(instant).await;
+                SysTime::delay_until(instant).await;
             }
         }
 
@@ -163,10 +150,11 @@ mod nucleo_f767zi_board {
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
             ctx.local.cc1101_wrp.init_config().unwrap();
 
-            Systick::delay(100.millis().into()).await;
+            SysTime::delay(TimeSize::millis(100)).await;
 
             loop {
-                let _task_rf_com = {
+                // RF Communication Task
+                {
                     let mut button_int_flag = false;
                     let mut cc1101_int_flag = false;
                     let mut data_rx: [u8; PACKET_LENGTH as usize] = [0; PACKET_LENGTH as usize];
@@ -175,11 +163,9 @@ mod nucleo_f767zi_board {
                     let mut lqi: u8 = 0;
 
                     // Prepare Tx data
-                    let _setup_data_tx = {
-                        for (index, element) in data_tx.iter_mut().enumerate() {
-                            *element = index as u8;
-                        }
-                    };
+                    for (index, element) in data_tx.iter_mut().enumerate() {
+                        *element = index as u8;
+                    }
 
                     // Lock shared "button_int_signal" resource. Use it in the critical section
                     ctx.shared.button_int_signal.lock(|signal| {
@@ -241,7 +227,7 @@ mod nucleo_f767zi_board {
                     }
 
                     // Test Code: Simulate other activity
-                    Systick::delay(10.millis().into()).await;
+                    SysTime::delay(TimeSize::millis(10)).await;
                 };
             }
         }
@@ -249,7 +235,8 @@ mod nucleo_f767zi_board {
         #[idle(shared = [serial])]
         fn idle(mut _ctx: idle::Context) -> ! {
             loop {
-                let _idle = {
+                // Idle Task
+                {
                     // Do nothing
                 };
 
@@ -259,7 +246,7 @@ mod nucleo_f767zi_board {
 
         #[task(binds = EXTI15_10, local = [button, led_green, led_blue, led_red], shared=[button_int_signal, serial])]
         fn button_isr(mut ctx: button_isr::Context) {
-            let instant = Systick::now();
+            let instant = SysTime::now();
             let debounced: bool = (instant - ctx.local.button.debounce_instant)
                 > ctx.local.button.get_debounce_period();
 
@@ -281,7 +268,7 @@ mod nucleo_f767zi_board {
                 ctx.shared.serial.lock(|serial| {
                     serial.formatln(format_args!(
                         "[button_isr] time: {}",
-                        Systick::now().duration_since_epoch()
+                        SysTime::now().duration_since_epoch()
                     ));
                 });
             }
@@ -301,7 +288,7 @@ mod nucleo_f767zi_board {
             ctx.shared.serial.lock(|serial| {
                 serial.formatln(format_args!(
                     "[cc1101_isr] time: {}",
-                    Systick::now().duration_since_epoch()
+                    SysTime::now().duration_since_epoch()
                 ));
             });
 

@@ -10,31 +10,92 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  ci-linux:
+  ci-obc:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        firmware:
-          # - adcs
-          # - com
-          # - eps
-          - obc
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'true'
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly-2023-12-17
-        target: thumbv7em-none-eabihf
-        override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: --manifest-path ${{ github.workspace }}/firmware/${{ matrix.firmware }}/cubesat-1-fw-${{ matrix.firmware }}/Cargo.toml --target thumbv7em-none-eabihf --features nucleo-f767zi-board --verbose
-    # - uses: actions-rs/cargo@v1
-    #   with:
-    #     command: test
-    #     args: --manifest-path ${{ github.workspace }}/firmware/${{ matrix.firmware }}/cubesat-1-fw-${{ matrix.firmware }}/Cargo.toml --target x86_64-unknown-linux-gnu --verbose
+        config:
+          - target: thumbv7em-none-eabihf
+            feature: nucleo-f767zi-board
+            examples: [
+              "button_and_leds",
+              "cc1101_rx_tx_w_button",
+              "hello_cubesat",
+              "temp_on_serial",
+              "test_cc1101"
+            ]
+          - target: thumbv7em-none-eabihf
+            feature: nucleo-f446re-board
+            examples: [
+              "rtic_button_and_led_nucleo_f446re",
+              "serial_nucleo_f446re"
+            ]
+          - target: thumbv7m-none-eabi
+            feature: stm32vldiscovery-board
+            examples: [
+              "hello_stm32vldiscovery",
+              "serial_stm32vldiscovery"
+            ]
 
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
+      # Install Rust
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly-2024-09-05
+          target: ${{ matrix.config.target }}
+          override: true
+
+      # Install additional tools
+      - name: Install tools
+        run: |
+          rustup component add clippy
+          rustup component add rustfmt
+
+      # Build the project
+      - name: Build OBC Firmware
+        run: cargo build --target ${{ matrix.config.target }} --features ${{ matrix.config.feature }}
+        working-directory: firmware/obc/cubesat-1-fw-obc
+
+      # Run tests
+      # === TODO: Add tests ===
+      # - name: Run Tests
+      #   run: cargo test --target ${{ matrix.config.target }} --features ${{ matrix.config.feature }}
+      #   working-directory: firmware/obc/cubesat-1-fw-obc
+
+      # Lint the code
+      - name: Run Clippy
+        run: cargo clippy --target ${{ matrix.config.target }} --features ${{ matrix.config.feature }}
+        working-directory: firmware/obc/cubesat-1-fw-obc
+
+      # Format check
+      - name: Check code formatting
+        run: cargo fmt --all --check
+        working-directory: firmware/obc/cubesat-1-fw-obc
+
+      # Build the examples
+      - name: Build OBC Examples
+        run: |
+          examples="${{ toJSON(matrix.config.examples) }}"
+          for example in $(echo "$examples" | tr -d '[]"' | tr ',' ' '); do
+            echo "Build the example: $example"
+            cargo build --example "$example" --target ${{ matrix.config.target }} --features ${{ matrix.config.feature }}
+          done
+        working-directory: firmware/obc/cubesat-1-fw-obc
+
+      # Lint the examples
+      - name: Lint OBC Examples
+        run: |
+          examples="${{ toJSON(matrix.config.examples) }}"
+          for example in $(echo "$examples" | tr -d '[]"' | tr ',' ' '); do
+            echo "Lint the example: $example"
+            cargo clippy --example "$example" --target ${{ matrix.config.target }} --features ${{ matrix.config.feature }}
+          done
+        working-directory: firmware/obc/cubesat-1-fw-obc

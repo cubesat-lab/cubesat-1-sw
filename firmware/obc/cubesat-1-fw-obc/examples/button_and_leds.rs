@@ -20,6 +20,7 @@ use stm32f7xx_hal::{
     pac::Peripherals as Stm32F7Peripherals,
     prelude::*,
 };
+use sys_time::prelude::*;
 
 // Signal used by the main thread to do action on Button event
 static SIGNAL: Mutex<Cell<bool>> = Mutex::new(Cell::new(true));
@@ -66,6 +67,7 @@ fn main() -> ! {
         syscfg: &mut syscfg,
         exti: &mut exti,
         apb: &mut rcc.apb2,
+        debounce_period: TimeSize::millis(150),
     });
 
     // Save information needed by the interrupt handler to the global variable
@@ -86,7 +88,7 @@ fn main() -> ! {
     loop {
         free(|cs| {
             // Wait for the interrupt signal from the Button
-            if false == SIGNAL.borrow(cs).get() {
+            if !SIGNAL.borrow(cs).get() {
                 // Perform actions on the Button push event
                 match led_state {
                     LedState::Red => {

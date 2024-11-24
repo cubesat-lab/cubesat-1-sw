@@ -54,20 +54,16 @@ fn main() -> ! {
         let (complete_frame, frame_valid) = process_incoming_frame(&mut buffer, &mut buffer_size);
 
         if complete_frame {
-            if frame_valid {
+            let data: [u8; 2] = if frame_valid {
                 // Frame was valid - prepare a message
-                let data = [0xCA, 0xFE];
-                let frame_len = pack_frame(&data, &mut answer);
-                for i in 0..(frame_len) {
-                    serial.write(answer[i]).unwrap();
-                }
+                [0xCA, 0xFE]
             } else {
                 // Frame was not valid - prepare a message
-                let data = [0xFF, 0xFF];
-                let frame_len = pack_frame(&data, &mut answer);
-                for i in 0..(frame_len) {
-                    serial.write(answer[i]).unwrap();
-                }
+                [0xFF, 0xFF]
+            };
+            let frame_len = pack_frame(&data, &mut answer);
+            for byte in answer.iter().take(frame_len) {
+                serial.write(*byte).unwrap();
             }
         }
     }

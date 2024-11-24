@@ -2,13 +2,13 @@
 
 pub use cc1101::{
     AddressFilter, AutoCalibration, Cc1101, CcaMode, Error, GdoCfg, MachineState, ModulationFormat,
-    NumPreamble, PacketLength, RadioMode, SyncMode, UserError, FIFO_SIZE_MAX,
+    NumPreamble, PacketLength, RadioMode, RxOffMode, SyncMode, UserError, FIFO_SIZE_MAX,
+    PACKET_STATUS_BYTES,
 };
 use embedded_hal::{digital::PinState, spi::SpiDevice};
-use fugit::{Duration, Instant};
-use rtic_monotonics::{systick::Systick, Monotonic};
+use sys_time::prelude::*;
 
-pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX;
+pub const PACKET_LENGTH: u8 = FIFO_SIZE_MAX - PACKET_STATUS_BYTES;
 
 enum RxState {
     Waiting,
@@ -31,6 +31,8 @@ pub enum Cc1101WrapperError {
     TxUnderflow,
     /// The RX FIFO buffer overflowed, too small buffer for configured packet length.
     RxOverflow,
+    /// RX FIFO is empty
+    RxFifoEmpty,
     /// Corrupt packet received with invalid CRC.
     CrcMismatch,
     /// Invalid state read from MARCSTATE register
@@ -87,7 +89,7 @@ pub struct Cc1101Wrapper<SPI> {
     tx_data: DataBuffer,
     last_rx_rssi: i16,
     last_rx_lqi: u8,
-    timestamp_monitor: Instant<u64, 1, 1000>,
+    timestamp_monitor: TimeInstant,
     last_error: Option<Cc1101WrapperError>,
     error_count: u32,
 }
@@ -110,7 +112,7 @@ where
                 tx_data: DataBuffer::default(),
                 last_rx_rssi: 0,
                 last_rx_lqi: 0,
-                timestamp_monitor: Systick::now(),
+                timestamp_monitor: SysTime::now(),
                 last_error: None,
                 error_count: 0,
             },
@@ -138,9 +140,10 @@ where
         self.cc1101.set_address_filter(AddressFilter::Disabled)?;
         self.cc1101.crc_enable(true)?;
         self.cc1101.crc_autoflush_enable(true)?;
-        self.cc1101.append_status_enable(false)?;
+        self.cc1101.append_status_enable(true)?;
         self.cc1101.white_data_enable(false)?;
         self.cc1101.set_cca_mode(CcaMode::CciAlways)?;
+        self.cc1101.set_rxoff_mode(RxOffMode::StayInRx)?;
         self.cc1101.set_autocalibration(AutoCalibration::FromIdle)?;
         self.cc1101.set_gdo2_active_state(PinState::Low)?;
         self.cc1101.set_gdo2_config(GdoCfg::CRC_OK)?;
@@ -239,13 +242,13 @@ where
     // ---------------------------------------------------------------------------------
 
     async fn start_idle_state(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
+        let timeout = TimeSize::millis(10);
         let result = self.set_radio_mode(RadioMode::Idle, timeout).await;
         self.process_native_result(result);
     }
 
     async fn start_rx_state(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
+        let timeout = TimeSize::millis(10);
         let result = self.set_radio_mode(RadioMode::Receive, timeout).await;
         self.process_native_result(result);
     }
@@ -260,12 +263,10 @@ where
         // Start Rx
         self.start_rx_state().await;
 
-        match Systick::timeout_after(fugit::ExtU64::millis(100), self.receive_polling()).await {
+        match SysTime::timeout_after(TimeSize::millis(100), self.receive_polling()).await {
             Ok(result) => match result {
                 Ok(state) => match state {
-                    RxState::Received => {
-                        self.rx_data.ready = true;
-                    }
+                    RxState::Received => { /* Ok */ }
                     _ => { /* Unreachable statement */ }
                 },
                 Err(error) => {
@@ -297,7 +298,7 @@ where
     }
 
     async fn process_transmit(&mut self) {
-        let timeout = fugit::ExtU64::millis(10);
+        let timeout = TimeSize::millis(10);
 
         // Check if data is available for write
         if self.tx_data.ready {
@@ -336,7 +337,7 @@ where
             // Start Tx
             let result = self.set_radio_mode(RadioMode::Transmit, timeout).await;
             self.process_native_result(result);
-            Systick::delay(fugit::ExtU64::millis(5)).await;
+            SysTime::delay(TimeSize::millis(5)).await;
 
             // Wait for Tx to finish and get the result
             let result = self.await_machine_state(MachineState::IDLE, timeout).await;
@@ -352,9 +353,10 @@ where
     }
 
     async fn monitor(&mut self) {
-        let period: Duration<u64, 1, 1000> = fugit::ExtU64::millis(1000);
-        let timestamp_now = Systick::now();
+        let period = TimeDuration::millis(1000);
+        let timestamp_now = SysTime::now();
 
+        // Perform Monitoring activity every 1 s
         if (timestamp_now - self.timestamp_monitor) > period {
             self.timestamp_monitor = timestamp_now;
 
@@ -364,6 +366,8 @@ where
                 Some(state) => {
                     if state != MachineState::RX {
                         self.store_error(Cc1101WrapperError::MonitoringError);
+
+                        // TODO: Clear all errors (flush RX, TX buffers, other?)
 
                         // Restart Rx state
                         self.start_rx_state().await;
@@ -387,7 +391,7 @@ where
         loop {
             match rx_state {
                 RxState::Waiting => {
-                    Systick::delay(fugit::ExtU64::millis(5)).await;
+                    SysTime::delay(TimeSize::millis(5)).await;
 
                     let packet_status = self.cc1101.get_packet_status()?;
                     if packet_status.sof_delimiter {
@@ -395,7 +399,7 @@ where
                     }
                 }
                 RxState::Receiving => {
-                    Systick::delay(fugit::ExtU64::millis(1)).await;
+                    SysTime::delay(TimeSize::millis(1)).await;
 
                     let num_rxbytes = self.cc1101.get_rx_bytes()?;
                     if (num_rxbytes > 0) && (num_rxbytes == last_rxbytes) {
@@ -416,25 +420,25 @@ where
                 RxState::Received => {
                     let mut length: Option<u8> = None;
                     let mut address: Option<u8> = None;
-                    let mut rssi: Option<i16> = None;
-                    let mut lqi: Option<u8> = None;
+                    let mut rssi: Option<i16> = Some(0);
+                    let mut lqi: Option<u8> = Some(0);
+                    let data_length = last_rxbytes - PACKET_STATUS_BYTES;
 
                     self.cc1101.read_data(
                         &mut length,
                         &mut address,
                         &mut rssi,
                         &mut lqi,
-                        &mut self.rx_data.data[0..(last_rxbytes as usize)],
+                        &mut self.rx_data.data[0..(data_length as usize)],
                     )?;
 
                     // Store received data
-                    self.rx_data.length = last_rxbytes; // Fixed Length?
-
-                    // self.rx_data.length = length.unwrap() - 1; // Minus address byte
-                    // self.rx_data.address = address.unwrap();
+                    self.rx_data.ready = true;
+                    self.rx_data.length = data_length;
                     self.rx_data.address = 0;
-                    self.last_rx_rssi = self.cc1101.get_rssi_dbm()?;
-                    self.last_rx_lqi = self.cc1101.get_lqi()?;
+
+                    self.last_rx_rssi = rssi.unwrap();
+                    self.last_rx_lqi = lqi.unwrap();
                     break;
                 }
                 RxState::Error => {
@@ -449,30 +453,34 @@ where
     fn receive_interrupt(&mut self) -> Result<(), Cc1101WrapperError> {
         let mut length: Option<u8> = None;
         let mut address: Option<u8> = None;
-        let mut rssi: Option<i16> = None;
-        let mut lqi: Option<u8> = None;
+        let mut rssi: Option<i16> = Some(0);
+        let mut lqi: Option<u8> = Some(0);
+
+        // NOTE: We don't check here the CRC using `get_packet_status` because the GDO2
+        // interrupt is already configured to assert when a packet has been received with CRC OK.
 
         let rxbytes = self.cc1101.get_rx_bytes()?;
-        let packet_status = self.cc1101.get_packet_status()?;
 
-        if packet_status.crc_ok {
+        if rxbytes > 0 {
+            let data_length = rxbytes - PACKET_STATUS_BYTES;
+
             self.cc1101.read_data(
                 &mut length,
                 &mut address,
                 &mut rssi,
                 &mut lqi,
-                &mut self.rx_data.data[0..(rxbytes as usize)],
+                &mut self.rx_data.data[0..(data_length as usize)],
             )?;
 
             // Store received data
             self.rx_data.ready = true;
-            self.rx_data.length = rxbytes;
+            self.rx_data.length = data_length;
             self.rx_data.address = 0;
 
-            self.last_rx_rssi = self.cc1101.get_rssi_dbm()?;
-            self.last_rx_lqi = self.cc1101.get_lqi()?;
+            self.last_rx_rssi = rssi.unwrap();
+            self.last_rx_lqi = lqi.unwrap();
         } else {
-            return Err(Cc1101WrapperError::CrcMismatch);
+            return Err(Cc1101WrapperError::RxFifoEmpty);
         }
 
         Ok(())
@@ -516,7 +524,7 @@ where
         &mut self,
         target_state: MachineState,
     ) -> Result<(), Cc1101WrapperError> {
-        let delay = fugit::ExtU64::micros(1000);
+        let delay = TimeSize::micros(1000);
         loop {
             let machine_state = self.cc1101.get_machine_state()?;
 
@@ -534,16 +542,16 @@ where
                 /* Ignore other states */
             }
 
-            Systick::delay(delay).await;
+            SysTime::delay(delay).await;
         }
     }
 
     async fn await_machine_state(
         &mut self,
         target_state: MachineState,
-        timeout: Duration<u64, 1, 1000>,
+        timeout: TimeDuration,
     ) -> Result<(), Cc1101WrapperError> {
-        match Systick::timeout_after(timeout, self.check_machine_state(target_state)).await {
+        match SysTime::timeout_after(timeout, self.check_machine_state(target_state)).await {
             Ok(result) => result,
             Err(_) => Err(Cc1101WrapperError::TimeoutError),
         }
@@ -553,7 +561,7 @@ where
     async fn set_radio_mode(
         &mut self,
         radio_mode: RadioMode,
-        timeout: Duration<u64, 1, 1000>,
+        timeout: TimeDuration,
     ) -> Result<(), Cc1101WrapperError> {
         // Set "Idle" mode before going into any other mode
         self.cc1101.exit_rx_tx()?;
