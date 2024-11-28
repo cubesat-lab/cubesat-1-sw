@@ -102,3 +102,7 @@ So whenever flashing a firmware, select the `--features`, `--target` (if needed)
 - NUCLEO-F446RE with CC1101 module
 
     ![NUCLEO-F446RE + E07-M1101D-SMA (CC1101)](./../../../docs/schematics/nucleo-f446re-cc1101.drawio.png)
+
+- NUCLEO-F446RE with 2 CAN transceiver modules
+
+    ![NUCLEO-F446RE + 2x SN65HVD230 (CAN)](./../../../docs/schematics/nucleo-f446re-sn65hvd230.drawio.png)
