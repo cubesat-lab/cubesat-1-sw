@@ -139,6 +139,7 @@
                 {"value": "serial_stm32vldiscovery"},
                 {"value": "temp_on_serial"},
                 {"value": "test_cc1101"},
+                {"value": "can_loopback_nucleo_f446re"},
             ]
         },
     ]
