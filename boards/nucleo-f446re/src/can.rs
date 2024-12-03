@@ -1,13 +1,13 @@
 use bxcan::{self, Can as BxCan, Data, Frame, StandardId, TransmitStatus};
-use core;
+// use core;
 // use core::marker::PhantomData;
-use stm32f4xx_hal::can::{
-    Can as HalCan, Can1 as HalCan1, Can2 as HalCan2, Instance as HalInstance,
-};
-use stm32f4xx_hal::gpio::alt::CanCommon;
-use stm32f4xx_hal::gpio::{self, Alternate, Pin, PinMode, AF9, PA11, PA12, PB13, PB5, PB6};
+// use stm32f4xx_hal::can::{
+//     Can as HalCan, Can1 as HalCan1, Can2 as HalCan2, Instance as HalInstance,
+// };
+// use stm32f4xx_hal::gpio::alt::CanCommon;
+use stm32f4xx_hal::gpio::{Pin, AF9};
 use stm32f4xx_hal::pac::{CAN1, CAN2};
-use stm32f4xx_hal::rcc::{BusClock, Clocks};
+use stm32f4xx_hal::rcc::Clocks;
 
 pub enum Error {
     InvalidId,
@@ -49,6 +49,7 @@ pub struct CanConfiguration {
 }
 
 // wrapper over CAN1 and CAN2
+#[allow(dead_code)]
 pub struct CanWrapper<CAN> {
     can: CAN,
 }

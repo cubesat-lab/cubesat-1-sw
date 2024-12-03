@@ -67,6 +67,10 @@ name = "button_and_leds"
 required-features = ["nucleo-f767zi-board"]
 
 [[example]]
+name = "can_loopback_nucleo_f446re"
+required-features = ["nucleo-f446re-board"]
+
+[[example]]
 name = "cc1101_rx_tx_w_button"
 required-features = ["nucleo-f767zi-board"]
 

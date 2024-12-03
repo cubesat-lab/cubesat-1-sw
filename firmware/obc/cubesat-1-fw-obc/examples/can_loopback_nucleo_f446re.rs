@@ -151,13 +151,14 @@
 use panic_halt as _;
 
 use bxcan::filter::Mask32;
-use bxcan::{ExtendedId, Fifo, Frame, FramePriority, MasterInstance, StandardId};
-use cortex_m;
+use bxcan::{ExtendedId, Fifo, Frame, MasterInstance, StandardId};
+// use cortex_m;
 use cortex_m_rt::entry;
-use nb::block;
+// use nb::block;
 use stm32f4xx_hal::can::Can;
 use stm32f4xx_hal::{pac, prelude::*};
 
+#[allow(dead_code)]
 pub struct Can1Wrapper(Can<pac::CAN1>);
 
 unsafe impl bxcan::Instance for Can1Wrapper {
@@ -170,6 +171,7 @@ unsafe impl bxcan::FilterOwner for Can1Wrapper {
 
 unsafe impl MasterInstance for Can1Wrapper {}
 
+#[allow(dead_code)]
 pub struct Can2Wrapper(Can<pac::CAN2>);
 unsafe impl bxcan::Instance for Can2Wrapper {
     const REGISTERS: *mut bxcan::RegisterBlock = pac::CAN2::ptr() as *mut _;
@@ -182,7 +184,7 @@ fn main() -> ! {
     dp.CAN1.ier().modify(|_, w| w.tmeie().set_bit());
 
     let rcc = dp.RCC.constrain();
-    let clocks = rcc
+    let _clocks = rcc
         .cfgr
         .use_hse(8.MHz())
         .sysclk(144.MHz())
@@ -242,7 +244,7 @@ fn main() -> ! {
 
     let mut test: [u8; 8] = [0; 8];
     let mut count: u8 = 0;
-    let id: u16 = 0x0000;
+    let _id: u16 = 0x0000;
 
     test[1] = 0;
     test[2] = 0;
@@ -257,14 +259,25 @@ fn main() -> ! {
         let second_test_frame = Frame::new_data(ExtendedId::new(0).unwrap(), test);
 
         if can1.is_transmitter_idle() {
-            let status = block!(can1.transmit(&test_frame)).unwrap();
-            let second_status = block!(can1.transmit(&second_test_frame)).unwrap();
-            let third_status = block!(can2.transmit(&second_test_frame)).unwrap();
-            let fourth_status = block!(can2.transmit(&test_frame)).unwrap();
+            // let _status = block!(can1.transmit(&test_frame)).unwrap();
+            // let _second_status = block!(can1.transmit(&second_test_frame)).unwrap();
+
+            let _status = can1.transmit(&test_frame).unwrap();
+            let _second_status = can1.transmit(&second_test_frame).unwrap();
         }
+
+        if can2.is_transmitter_idle() {
+            // let _third_status = block!(can2.transmit(&second_test_frame)).unwrap();
+            // let _fourth_status = block!(can2.transmit(&test_frame)).unwrap();
+            let _third_status = can2.transmit(&second_test_frame).unwrap();
+            let _fourth_status = can2.transmit(&test_frame).unwrap();
+        }
+
         // let status2 = can2.transmit(&test_frame).unwrap();
-        let first_received = block!(can1.receive()).unwrap();
-        let received = block!(can2.receive()).unwrap();
+        // let _first_received = block!(can1.receive()).unwrap();
+        // let _received = block!(can2.receive()).unwrap();
+        // let _first_received = can1.receive().unwrap();
+        // let _received = can2.receive().unwrap();
         if count < 255 {
             count += 1;
         } else {
