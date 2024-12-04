@@ -262,15 +262,15 @@ fn main() -> ! {
             // let _status = block!(can1.transmit(&test_frame)).unwrap();
             // let _second_status = block!(can1.transmit(&second_test_frame)).unwrap();
 
-            let _status = can1.transmit(&test_frame).unwrap();
-            let _second_status = can1.transmit(&second_test_frame).unwrap();
+            let _status = can1.transmit(&test_frame);
+            let _second_status = can1.transmit(&second_test_frame);
         }
 
         if can2.is_transmitter_idle() {
             // let _third_status = block!(can2.transmit(&second_test_frame)).unwrap();
             // let _fourth_status = block!(can2.transmit(&test_frame)).unwrap();
-            let _third_status = can2.transmit(&second_test_frame).unwrap();
-            let _fourth_status = can2.transmit(&test_frame).unwrap();
+            let _third_status = can2.transmit(&second_test_frame);
+            let _fourth_status = can2.transmit(&test_frame);
         }
 
         // let status2 = can2.transmit(&test_frame).unwrap();
