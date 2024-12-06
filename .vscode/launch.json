@@ -127,8 +127,8 @@
             "type": "pickString",
             "description": "Which example? (name)",
             "options": [
-                {"value": "serial_nucleo_f446re"},
                 {"value": "button_and_leds"},
+                {"value": "can_loopback_nucleo_f446re"},
                 {"value": "cc1101_rx_tx_w_button"},
                 {"value": "hello_cubesat"},
                 {"value": "hello_stm32vldiscovery"},
@@ -139,7 +139,7 @@
                 {"value": "serial_stm32vldiscovery"},
                 {"value": "temp_on_serial"},
                 {"value": "test_cc1101"},
-                {"value": "can_loopback_nucleo_f446re"},
+                {"value": "usb_serial"},
             ]
         },
     ]
