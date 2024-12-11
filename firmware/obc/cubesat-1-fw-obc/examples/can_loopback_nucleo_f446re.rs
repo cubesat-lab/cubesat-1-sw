@@ -1,160 +1,18 @@
-// #![no_main]
-// #![no_std]
-
-// use cortex_m_rt::entry;
-// use nb::block;
-// use stm32f4xx_hal::{
-//     can::{Can as HalCan},
-//     gpio::{self, gpioa::{PA11, PA12}, Alternate, AF9},
-//     pac::{self, CAN1},
-//     prelude::*,
-// };
-
-// use bxcan::{self, Data, Frame, StandardId};
-// use cortex_m_semihosting::hprintln;
-// use panic_semihosting;
-
-// use fugit::Hertz;
-
-// use nucleo_f446re::can::{Can, CanConfiguration, CanPins, CanParameters};
-// use nucleo_f446re::serial::{SerialParameters, SerialUartUsb};
-
-// #[entry]
-// fn main() -> ! {
-//     let _cp = cortex_m::Peripherals::take().unwrap();
-//     let dp = pac::Peripherals::take().unwrap();
-
-//     let rcc = dp.RCC.constrain();
-//     let clocks = rcc.cfgr.sysclk(180.MHz() as Hertz<u32>).freeze();
-
-//     // dp.CAN1.fmr().modify(|_, w| unsafe { w.can2sb().bits(14) });
-
-//     let gpioa = dp.GPIOA.split();
-//     let can1_rx = gpioa.pa11.into_alternate::<9>();
-//     let can1_tx = gpioa.pa12.into_alternate::<9>();
-
-//     let gpiob = dp.GPIOB.split();
-//     let can2_rx = gpiob.pb5.into_alternate::<9>();
-//     let can2_tx = gpiob.pb6.into_alternate::<9>();
-
-//     let can1_parameters = CanParameters {
-//         can: dp.CAN1,
-//         clocks: &clocks,
-//         pins: CanPins::Can1((can1_rx, can1_tx)),
-//     };
-
-//     let can1_config = CanConfiguration {
-//         bit_timing: 0x001e0013,
-//         loopback: false,
-//         silent: false,
-//         auto_retransmission: true,
-//     };
-
-//     let can2_parameters = CanParameters {
-//         can: dp.CAN2,
-//         clocks: &clocks,
-//         pins: CanPins::Can2((can2_rx, can2_tx)),
-//     };
-
-//     let can2_config = CanConfiguration {
-//         bit_timing: 0x001e0013,
-//         loopback: false,
-//         silent: false,
-//         auto_retransmission: true,
-//     };
-
-//     let mut can1 = Can::new(can1_parameters, can1_config);
-//     let mut can2 = Can::new(can2_parameters, can2_config);
-
-// //     can1.configure_filters(
-// //         None,
-// //         0,
-// //         bxcan::Fifo::Fifo0,
-// //         bxcan::filter::BankConfig::Mask32(bxcan::filter::Mask32::accept_all()),
-// //     );
-
-// //     can2.configure_filters(
-// //         Some(&mut can1),
-// //         14,
-// //         bxcan::Fifo::Fifo0,
-// //         bxcan::filter::BankConfig::Mask32(bxcan::filter::Mask32::accept_all())
-// // ,
-// //     );
-
-//     const DATA: [u8; 8] = [0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF];
-
-//     let serial_parameters = SerialParameters {
-//         uart: dp.USART2,
-//         clocks: &clocks,
-//         pin_tx: gpioa.pa2.into_alternate(),
-//         pin_rx: gpioa.pa3.into_alternate(),
-//     };
-//     let mut serial = SerialUartUsb::new(serial_parameters);
-
-//     // let can = Can1Wrapper(HalCan::new(dp.CAN1, (can_tx, can_rx)));
-//     // let mut bx_can = bxcan::Can::builder(can)
-//     //     .set_bit_timing(0x001a0005)
-//     //     .set_loopback(true)
-//     //     .enable();
-
-//     // let frame = Frame::new_data(
-//     //     StandardId::new(0).unwrap(),
-//     //     bxcan::Data::new(&[0, 0xFF, 0, 0xFF, 0, 0xFF, 0, 0xFF]).unwrap());
-//     let mut id: u16 = 0;
-
-//     loop {
-//         // bx_can.transmit(&frame);
-//         id = (id + 1) % 0x7FF;
-
-//         match can1.send(0, &DATA) {
-//             Ok(_transmit_status) => {
-//                 serial.println("Successful transmission");
-//             },
-//             Err(_err) => {
-//                 serial.println("Transmission error");
-//             }
-//         }
-//         match can1.receive() {
-//             Ok(_frame) => {
-//                 serial.println("Received successfully");
-//             },
-//             Err(_err) => {
-//                 serial.println("Error receiving");
-//             }
-//         }
-
-//         match can2.send(0, &DATA) {
-//             Ok(_transmit_status) => {
-//                 serial.println("Successful transmission");
-//             },
-//             Err(_err) => {
-//                 serial.println("Transmission error");
-//             }
-//         }
-//         match can2.receive() {
-//             Ok(_frame) => {
-//                 serial.println("Received successfully");
-//             },
-//             Err(_err) => {
-//                 serial.println("Error receiving");
-//             }
-//         }
-//         // bx_can.receive();
-//     }
-// }
-
-// --------------------------------------------------------------
-
 #![no_main]
 #![no_std]
 
 use panic_halt as _;
 
 use bxcan::filter::Mask32;
-use bxcan::{ExtendedId, Fifo, Frame, MasterInstance, StandardId};
+use bxcan::{ExtendedId, Fifo, Frame, Id, MasterInstance, StandardId};
+use core::{
+    fmt::{self, Debug},
+    ops::Deref,
+};
 // use cortex_m;
 use cortex_m_rt::entry;
 // use nb::block;
+use nucleo_f446re::serial::{SerialParameters, SerialUartUsb};
 use stm32f4xx_hal::can::Can;
 use stm32f4xx_hal::{pac, prelude::*};
 
@@ -177,6 +35,30 @@ unsafe impl bxcan::Instance for Can2Wrapper {
     const REGISTERS: *mut bxcan::RegisterBlock = pac::CAN2::ptr() as *mut _;
 }
 
+// wrap the Frame structure in order to provide a Debug trait implementation that shows the id and the frame's data as hexadecimal values
+struct FrameDisplay(Frame);
+
+impl Debug for FrameDisplay {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("Frame")
+            .field(
+                "id",
+                &format_args!(
+                    "{:#X}",
+                    match self.0.id() {
+                        Id::Standard(id) => id.as_raw() as u32,
+                        Id::Extended(id) => id.as_raw(),
+                    }
+                ),
+            )
+            .field(
+                "data",
+                &format_args!("{:#X?}", &self.0.data().unwrap().deref()),
+            )
+            .finish()
+    }
+}
+
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
@@ -184,20 +66,18 @@ fn main() -> ! {
     dp.CAN1.ier().modify(|_, w| w.tmeie().set_bit());
 
     let rcc = dp.RCC.constrain();
-    let _clocks = rcc
+    let clocks = rcc
         .cfgr
         .use_hse(8.MHz())
         .sysclk(144.MHz())
         .pclk1(36.MHz())
+        .pclk2(72.MHz())
         .freeze();
-
-    // let clock1 = clocks.sysclk();
-    // let clock2 = clocks.pclk1();
-    // let clock3 = clocks.pclk2();
 
     let gpioa = dp.GPIOA.split();
     let gpiob = dp.GPIOB.split();
 
+    // initialize the CAN1 peripheral
     let mut can1 = {
         let rx = gpioa.pa11.into_alternate::<9>();
         let tx = gpioa.pa12.into_alternate::<9>();
@@ -213,19 +93,26 @@ fn main() -> ! {
             .enable()
     };
 
+    // configure CAN1's filters (0..13)
     let mut filters = can1.modify_filters();
     for bank in 0..14 {
         filters.enable_bank(bank, Fifo::Fifo0, Mask32::accept_all());
     }
 
+    // make the slave's filters start from the 14th
     filters.set_split(14);
+
+    // get CAN2's filters
     let mut slave_filters = filters.slave_filters();
+
+    // configure CAN2's filters (14..27)
     for bank in 14..28 {
         slave_filters.enable_bank(bank, Fifo::Fifo0, Mask32::accept_all());
     }
 
     drop(filters);
 
+    // initialize the CAN2 peripheral
     let mut can2 = {
         let tx = gpiob.pb6.into_alternate::<9>();
         let rx = gpiob.pb12.into_alternate::<9>();
@@ -233,7 +120,7 @@ fn main() -> ! {
         let can = Can2Wrapper(dp.CAN2.can((tx, rx)));
 
         let can2 = bxcan::Can::builder(can)
-            .set_bit_timing(0x001e0007)
+            .set_bit_timing(0x001e0003)
             .set_loopback(false)
             .set_silent(false)
             .set_automatic_retransmit(false)
@@ -242,42 +129,93 @@ fn main() -> ! {
         can2
     };
 
-    let mut test: [u8; 8] = [0; 8];
+    // initialize the serial interface
+    let serial_parameters = SerialParameters {
+        uart: dp.USART2,
+        clocks: &clocks,
+        pin_tx: gpioa.pa2.into_alternate(),
+        pin_rx: gpioa.pa3.into_alternate(),
+    };
+    let mut serial = SerialUartUsb::new(serial_parameters);
+    serial.println("Serial initialized");
+
+    // initialize the count used in the test frames
     let mut count: u8 = 0;
-    let _id: u16 = 0x0000;
 
-    test[1] = 0;
-    test[2] = 0;
-    test[3] = 0;
-    test[4] = 0;
-    test[5] = 0;
-    test[6] = 0;
-    test[7] = 0;
+    // set the id used in the test frames
+    let can1_id: u16 = 0x0001;
+    let can2_id: u16 = 0x0002;
+
+    // initialize the test data
+    let mut can1_test_data: [u8; 8] = [count, 1, 1, 1, 1, 1, 1, 1];
+    let mut can2_test_data: [u8; 8] = [count, 2, 2, 2, 2, 2, 2, 2];
     loop {
-        test[0] = count;
-        let test_frame = Frame::new_data(StandardId::new(1).unwrap(), test);
-        let second_test_frame = Frame::new_data(ExtendedId::new(0).unwrap(), test);
+        // update the first byte of the test frames
+        can1_test_data[0] = count;
+        can2_test_data[0] = count;
+        // initialize the test frames
+        let can1_standard_frame = Frame::new_data(StandardId::new(can1_id).unwrap(), can1_test_data);
+        let _can1_extended_frame = Frame::new_data(ExtendedId::new(can1_id as u32).unwrap(), can1_test_data);
 
+        let can2_standard_frame = Frame::new_data(StandardId::new(can2_id).unwrap(), can2_test_data);
+        let _can2_extended_frame = Frame::new_data(ExtendedId::new(can2_id as u32).unwrap(), can2_test_data);
+
+
+        // check if the transmitter is available
         if can1.is_transmitter_idle() {
-            // let _status = block!(can1.transmit(&test_frame)).unwrap();
-            // let _second_status = block!(can1.transmit(&second_test_frame)).unwrap();
-
-            let _status = can1.transmit(&test_frame);
-            let _second_status = can1.transmit(&second_test_frame);
+            // try to send the frames on the CAN bus
+            let _standard_status = can1.transmit(&can1_standard_frame);
+            // let _extended_status = can1.transmit(&can1_extended_frame);
         }
 
+        loop {
+            // try to receive all frames
+            let can1_receive = can1.receive();
+            match can1_receive {
+                Ok(frame) => {
+                    // show the frame on the serial interface (run python3 ./tools/serial_link.py -p <board_port> -b <bit_rate>)
+                    let frame_display = FrameDisplay(frame);
+                    serial.formatln(format_args!("Received frame on CAN1: {:?}", frame_display));
+                }
+                Err(err) => {
+                    // show whether there was a buffer overrun, otherwise it's a WouldBlock error which is ignored
+                    if let nb::Error::Other(e) = err {
+                        serial.formatln(format_args!("CAN1 receive error: {:?}", e));
+                    } else {
+                        break;
+                    }
+                },
+            }
+        }
+
+        // check if the transmitter is available
         if can2.is_transmitter_idle() {
-            // let _third_status = block!(can2.transmit(&second_test_frame)).unwrap();
-            // let _fourth_status = block!(can2.transmit(&test_frame)).unwrap();
-            let _third_status = can2.transmit(&second_test_frame);
-            let _fourth_status = can2.transmit(&test_frame);
+            // try to send the frames on the CAN bus
+            let _standard_status = can2.transmit(&can2_standard_frame);
+            // let _extended_status = can2.transmit(&can2_extended_frame);
         }
 
-        // let status2 = can2.transmit(&test_frame).unwrap();
-        // let _first_received = block!(can1.receive()).unwrap();
-        // let _received = block!(can2.receive()).unwrap();
-        // let _first_received = can1.receive().unwrap();
-        // let _received = can2.receive().unwrap();
+        loop {
+            // try to receive all frames
+            let can2_receive = can2.receive();
+            match can2_receive {
+                Ok(frame) => {
+                    // show the frame on the serial interface (run python3 ./tools/serial_link.py -p <board_port> -b 115200>)
+                    let frame_display = FrameDisplay(frame);
+                    serial.formatln(format_args!("Received frame on CAN2: {:?}", frame_display));
+                }
+                Err(err) => {
+                    // show whether there was a buffer overrun, otherwise it's a WouldBlock error which is ignored
+                    if let nb::Error::Other(e) = err {
+                        serial.formatln(format_args!("CAN2 receive error: {:?}", e));
+                    } else {
+                        break;
+                    }
+                },
+            }
+        }
+
+        // increment the counter used as the first byte of the frames
         if count < 255 {
             count += 1;
         } else {
