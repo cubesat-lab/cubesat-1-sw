@@ -1,6 +1,7 @@
 # Rust generated files
 **/target
 **/Cargo.lock
+**/tarpaulin-report.html
 
 # Structurizr generated files
 docs/.structurizr

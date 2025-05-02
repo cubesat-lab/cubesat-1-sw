@@ -4,7 +4,7 @@
 This protocol is used for communication on a serial bus (UART, USB) between two nodes (microcontroller and computer), to exchange data using frames (packets) in a duplex system.
 The main scope of this protocol is to enable exchange of [Protocol Data Units](https://en.wikipedia.org/wiki/Protocol_data_unit) (PDUs) between host PC and the embedded MCU (microcontroller unit) in the most simple, reliable and straigh-forward way, maintaining coexistence of other types of data transmissions on the physical bus.
 The key features of this protocol are:
-- Bi-directional transmission of data frames with variable lenght
+- Bi-directional transmission of data frames with variable length
 - Frame CRC for data integrity check
 - No disruption of other data on the serial bus, such as ASCII characters or other frames
 
@@ -15,7 +15,7 @@ For a valid frame to be sent, the sender has to send first the **Frame Marker** 
 
 ### Receiving Frame
 To receive an SFP frame, the receiver has to implement a state machine that processes the incoming bytes from the serial bus in a following way.
-Wait for two bytes of the **Frame Marker**. While doing so, discard or re-route other data to other consumers. After when the **Frame Marker** was received successfuly, check for the next 2 bytes - **Data Length** field, to have value between [SFP_DATA_LEN_MIN](#serial-frame-protocol-parameters) and [SFP_DATA_LEN_MAX](#serial-frame-protocol-parameters) inclusive. Once the data lenght is successfully validated, continue reading that amount of **Data** bytes. After that, read the following 2 bytes of **CRC** and compare it to the calculated CRC on the joined bytes of **Data Length** and **Data** fields. If the comparison is equal, the receiving of frame successfuly completed. If at any point, any check fails, discard or re-route received bytes to other consumers.
+Wait for two bytes of the **Frame Marker**. While doing so, discard or re-route other data to other consumers. After when the **Frame Marker** was received successfuly, check for the next 2 bytes - **Data Length** field, to have value between [SFP_DATA_LEN_MIN](#serial-frame-protocol-parameters) and [SFP_DATA_LEN_MAX](#serial-frame-protocol-parameters) inclusive. Once the data length is successfully validated, continue reading that amount of **Data** bytes. After that, read the following 2 bytes of **CRC** and compare it to the calculated CRC on the joined bytes of **Data Length** and **Data** fields. If the comparison is equal, the receiving of frame successfuly completed. If at any point, any check fails, discard or re-route received bytes to other consumers.
 
 ### Frame Structure
 ![SFP Frame](sfp-frame.drawio.png)
@@ -24,18 +24,24 @@ Wait for two bytes of the **Frame Marker**. While doing so, discard or re-route 
 TODO
 <!-- Provide guidance and recommendations for implementing the protocol on both the sender and receiver sides. Include information on hardware requirements, software libraries, and best practices for robust communication. -->
 
+## Notes
+- All data is arranged in big-endian format
+- CRC-16 algorithm: CRC-16/CCITT-FALSE (CRC-16/IBM-3740)
+    - `width=16 poly=0x1021 init=0xffff refin=false refout=false xorout=0x0000 check=0x29b1 residue=0x0000 name="CRC-16/IBM-3740"`
+
 ## References
 - [UART](https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter)
 - [USB](https://en.wikipedia.org/wiki/USB)
 - [Cyclic redundancy check](https://en.wikipedia.org/wiki/Cyclic_redundancy_check)
+- [Catalogue of parametrised CRC algorithms with 16 bits](https://reveng.sourceforge.io/crc-catalogue/16.htm)
 
 ## Appendix
 ### Serial Frame Protocol parameters
 
-| Parameter         |     Value     |
-|-------------------|:-------------:|
-| SFP_FRAME_MARKER  | [0xAA, 0xAA]  |
-| SFP_DATA_LEN_MIN  | 1             |
-| SFP_DATA_LEN_MAX  | 1024          |
-| SFP_CRC_TYPE      | CRC-16-CCITT  |
-| SFP_VERSION       | 0.1.0         |
+| Parameter         | Value              |
+|-------------------|:------------------:|
+| SFP_FRAME_MARKER  | [0xAA, 0xAA]       |
+| SFP_DATA_LEN_MIN  | 1                  |
+| SFP_DATA_LEN_MAX  | 1024               |
+| SFP_CRC_TYPE      | CRC-16/CCITT-FALSE |
+| SFP_VERSION       | 0.1.0              |
