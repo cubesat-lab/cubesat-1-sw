@@ -24,6 +24,8 @@ mod nucleo_fxxxxx_board {
 
     #[cfg(feature = "nucleo-f446re-board")]
     use hal::gpio::Pull;
+    #[cfg(feature = "nucleo-f767zi-board")]
+    use hal::rcc::PLL48CLK;
 
     #[cfg(feature = "nucleo-f446re-board")]
     use nucleo_f446re as board;
@@ -44,9 +46,10 @@ mod nucleo_fxxxxx_board {
     use board::{
         led::{LedBlue, LedRed},
         spi::SpiMaster3 as SpiCc1101,
+        usb::{Usb, UsbParameters},
     };
 
-    #[app(device = pac, dispatchers = [TIM2, TIM3])]
+    #[app(device = pac, dispatchers = [TIM2, TIM3, TIM4])]
     mod app {
         use super::*;
         use shared_resources::{
@@ -71,6 +74,8 @@ mod nucleo_fxxxxx_board {
         type LedBlue = ();
         #[cfg(feature = "nucleo-f446re-board")]
         type LedRed = ();
+        #[cfg(feature = "nucleo-f446re-board")]
+        type Usb<'a> = ();
 
         #[cfg(feature = "nucleo-f446re-board")]
         const SYS_CLK: FreqSize = FreqSize::MHz(180);
@@ -92,6 +97,7 @@ mod nucleo_fxxxxx_board {
         #[local]
         struct Local {
             cc1101_wrp: Cc1101Wrapper<SpiCc1101>,
+            usb: Usb<'static>,
         }
 
         #[init]
@@ -105,6 +111,14 @@ mod nucleo_fxxxxx_board {
             let rcc = dp.RCC.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]
             let mut rcc = dp.RCC.constrain();
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let clocks = rcc
+                .cfgr
+                .use_pll()
+                .use_pll48clk(PLL48CLK::Pllq)
+                .sysclk(SYS_CLK)
+                .freeze();
+            #[cfg(feature = "nucleo-f446re-board")]
             let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze();
             #[cfg(feature = "nucleo-f446re-board")]
             let mut syscfg = dp.SYSCFG.constrain();
@@ -113,7 +127,6 @@ mod nucleo_fxxxxx_board {
             let mut exti = dp.EXTI;
 
             // Initialize GPIO Ports
-            #[cfg(feature = "nucleo-f446re-board")]
             let gpioa = dp.GPIOA.split();
             let gpiob = dp.GPIOB.split();
             let gpioc = dp.GPIOC.split();
@@ -141,7 +154,7 @@ mod nucleo_fxxxxx_board {
             #[cfg(feature = "nucleo-f767zi-board")]
             let led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
 
-            // Initialize UART for serial communication through USB
+            // Initialize UART for serial communication through USB Debug port
             #[cfg(feature = "nucleo-f446re-board")]
             let serial_param = SerialParameters {
                 uart: dp.USART2,
@@ -158,6 +171,22 @@ mod nucleo_fxxxxx_board {
             };
             let mut serial = SerialUartUsb::new(serial_param);
             serial.println("Hello RTIC!");
+
+            // Initialize USB
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let usb_param = UsbParameters {
+                global: dp.OTG_FS_GLOBAL,
+                device: dp.OTG_FS_DEVICE,
+                pwrclk: dp.OTG_FS_PWRCLK,
+                clocks: &clocks,
+                pin_dm: gpioa.pa11,
+                pin_dp: gpioa.pa12,
+            };
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let usb = Usb::new(usb_param);
+            #[cfg(feature = "nucleo-f446re-board")]
+            #[allow(clippy::let_unit_value)]
+            let usb = Usb::default();
 
             // Initialize User Button
             #[cfg(feature = "nucleo-f446re-board")]
@@ -226,6 +255,7 @@ mod nucleo_fxxxxx_board {
             let cc1101_wrp = Cc1101Wrapper::new(spi_cc1101);
 
             // Spawn tasks
+            task_1ms::spawn().ok();
             task_10ms::spawn().ok();
             task_rf_com::spawn().ok();
 
@@ -241,12 +271,33 @@ mod nucleo_fxxxxx_board {
                     led_red,
                     serial,
                 },
-                Local { cc1101_wrp },
+                Local { cc1101_wrp, usb },
             )
         }
 
         #[allow(unused_variables, unused_mut)]
-        #[task(priority = 1, shared = [serial])]
+        #[allow(clippy::let_unit_value)]
+        #[task(priority = 1, local = [usb])]
+        async fn task_1ms(mut ctx: task_1ms::Context) {
+            loop {
+                let mut instant = SysTime::now();
+                instant += TimeSize::millis(1);
+
+                let _task_1ms = {
+                    let mut usb_buffer = [0u8; 1024];
+
+                    #[cfg(feature = "nucleo-f767zi-board")]
+                    if ctx.local.usb.poll() {
+                        let _ = ctx.local.usb.write(b"Hello USB!\n");
+                    }
+                };
+
+                SysTime::delay_until(instant).await;
+            }
+        }
+
+        #[allow(unused_variables, unused_mut)]
+        #[task(priority = 2, shared = [serial])]
         async fn task_10ms(mut ctx: task_10ms::Context) {
             loop {
                 let mut instant = SysTime::now();
@@ -267,7 +318,7 @@ mod nucleo_fxxxxx_board {
             }
         }
 
-        #[task(priority = 2, local = [cc1101_wrp], shared = [button_int_signal, cc1101_int_signal, serial])]
+        #[task(priority = 3, local = [cc1101_wrp], shared = [button_int_signal, cc1101_int_signal, serial])]
         async fn task_rf_com(mut ctx: task_rf_com::Context) {
             ctx.local.cc1101_wrp.init_config().unwrap();
 

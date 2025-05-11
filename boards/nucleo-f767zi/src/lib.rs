@@ -8,3 +8,4 @@ pub mod serial;
 pub mod spi;
 pub mod temp;
 pub mod uid;
+pub mod usb;

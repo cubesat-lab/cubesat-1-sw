@@ -12,8 +12,11 @@ cortex-m-rt = "0.7.2"
 embedded-hal = "0.2.7"
 fugit = "0.3.7"
 nb = "1.0"
+static_cell = "2.1.0"
+stm32f7xx-hal = { version = "0.8.0", features = ["stm32f767", "rt", "usb_fs"] }
 sys-time = { path = "../../modules/sys-time", version = "0.1.0", features = ["cortex-m-systick", "systick-64bit", "stm32f767zi"] }
-stm32f7xx-hal = { version = "0.8.0", features = ["stm32f767", "rt"] }
+usb-device = "0.3.2"
+usbd-serial = "0.2.2"
 
 [dependencies.embedded-hal-1]
 package = "embedded-hal"
