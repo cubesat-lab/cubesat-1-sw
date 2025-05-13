@@ -15,3 +15,7 @@ docs/workspace.json
 # Robot Framework test files
 **/qemu_error.txt
 **/qemu_output.txt
+
+# Python generated files
+__pycache__/
+*.log
