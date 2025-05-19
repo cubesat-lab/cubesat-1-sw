@@ -10,10 +10,10 @@
 // - Implement the logic to send and receive packets via USB / Serial
 
 use fugit::{Duration, HertzU32, Instant};
+use nb::block;
 use panic_halt as _;
 use rtic::app;
 use rtic_monotonics::{systick::Systick, Monotonic, TimeoutError};
-use nb::block;
 
 mod nucleo_f767zi_board {
     use super::*;
@@ -23,12 +23,12 @@ mod nucleo_f767zi_board {
         button::{Button, ButtonParameters},
         event_pin::{EventPinCc1101Gdo2, EventPinParameters},
         led::{LedBlue, LedGreen, LedParameters, LedRed},
-        serial::{SerialParameters, SerialUartUsb, SerialEvent},
+        serial::{SerialEvent, SerialParameters, SerialUartUsb},
         spi::SpiMaster3,
         spi_adapter::SpiAdapter,
     };
-    use stm32f7xx_hal::{gpio::Edge, pac, prelude::*, interrupt};
     use packet_handler::Protocol;
+    use stm32f7xx_hal::{gpio::Edge, interrupt, pac, prelude::*};
 
     #[app(device = pac, dispatchers = [TIM2, TIM3])]
     mod app {
@@ -232,12 +232,10 @@ mod nucleo_f767zi_board {
 
                     // Systick::delay(10.millis().into()).await;
 
-
                     // let received = block!(ctx.local.serial.read()).unwrap_or(0);
                     // if received != 0 {
                     //     block!(ctx.local.serial.write(received)).ok();
                     // }
-
 
                     // Lock shared "serial" resource. Use it in the critical section
                     // ctx.shared.serial.lock(|serial| {
@@ -374,25 +372,22 @@ mod nucleo_f767zi_board {
 
         #[task(binds = USART3, shared = [serial, led_green, led_blue, led_red])]
         fn usart3_isr(mut ctx: usart3_isr::Context) {
-
-            ctx.shared.serial.lock(|serial| {
-                match serial.read() {
-                    Ok(byte) => {
-                        if byte == Protocol::PKT_REQ as u8 {
-                            ctx.shared.led_green.lock(|led_green| {
-                                led_green.set_state(PinState::High)
-                            });
-                        } else {
-                            ctx.shared.led_blue.lock(|led_blue| {
-                                led_blue.set_state(PinState::High)
-                            });
-                        }
+            ctx.shared.serial.lock(|serial| match serial.read() {
+                Ok(byte) => {
+                    if byte == Protocol::PKT_REQ as u8 {
+                        ctx.shared
+                            .led_green
+                            .lock(|led_green| led_green.set_state(PinState::High));
+                    } else {
+                        ctx.shared
+                            .led_blue
+                            .lock(|led_blue| led_blue.set_state(PinState::High));
                     }
-                    Err(_) => {
-                        ctx.shared.led_red.lock(|led_red| {
-                            led_red.set_state(PinState::High)
-                        });
-                    }
+                }
+                Err(_) => {
+                    ctx.shared
+                        .led_red
+                        .lock(|led_red| led_red.set_state(PinState::High));
                 }
             });
         }

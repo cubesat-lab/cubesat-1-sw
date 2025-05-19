@@ -284,11 +284,17 @@ mod nucleo_fxxxxx_board {
                 instant += TimeSize::millis(1);
 
                 let _task_1ms = {
-                    let mut usb_buffer = [0u8; 1024];
+                    let mut usb_buffer = [0u8; 64];
+
+                    // Perform USB packet loopback
 
                     #[cfg(feature = "nucleo-f767zi-board")]
-                    if ctx.local.usb.poll() {
-                        let _ = ctx.local.usb.write(b"Hello USB!\n");
+                    while ctx.local.usb.poll() {
+                        // Read data from USB
+                        if let Ok(len) = ctx.local.usb.read(&mut usb_buffer) {
+                            // Write data to USB
+                            let _ = ctx.local.usb.write(&usb_buffer[0..len]);
+                        }
                     }
                 };
 
