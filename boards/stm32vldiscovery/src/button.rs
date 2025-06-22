@@ -8,7 +8,6 @@ use sys_time::prelude::*;
 pub struct ButtonParameters<'a> {
     pub pin: Pin<'A', 0>,
     pub edge: Edge,
-    // pub syscfg: &'a mut SYSCFG,
     pub exti: &'a mut EXTI,
     pub afio: &'a mut Parts,
     pub cr: &'a mut <Pin<'A', 0> as HL>::Cr,

@@ -1,4 +1,5 @@
 use embedded_hal_1::spi::{Error, ErrorKind, ErrorType, Operation, SpiDevice};
+use embedded_hal::blocking::spi::{Write, Transfer};
 use stm32f1xx_hal::{
     // TODO: Make this module generic
     afio::Parts as AfioParts,
@@ -61,12 +62,7 @@ pub type Spi1Type =
 
 pub type CS = Pin<'A', 4, Output>;
 
-// pub struct SpiMaster<SPI: Instance> {
 
-// pub struct SpiMaster {
-//     pub spi: Spi<SPI1, (Pin<'A', 13>, Pin<'A', 14>, Pin<'A', 15,>)>,
-//     pub cs: Pin<'A', 4>,
-// }
 
 pub struct SpiMaster {
     pub spi: Spi1Type,
@@ -144,7 +140,7 @@ impl SpiDevice for SpiMaster {
                     // self.spi.read(buf).map_err(SpiError::from)?;
                 }
                 Operation::Write(buf) => {
-                    // self.spi.write(buf).map_err(SpiError::from)?;
+                    self.spi.write(buf).map_err(SpiError::from)?;
                 }
                 Operation::Transfer(read, write) => {
                     // self.spi.transfer(read, write).map_err(SpiError::from)?;
@@ -164,37 +160,32 @@ impl SpiDevice for SpiMaster {
         Ok(())
     }
 
-    // fn read(&mut self, buf: &mut [u8]) -> Result<(), SpiError> {
+    // fn write_bytes(&mut self, buf: &[u8]) -> Result<(), SpiError> {
     //     self.cs.set_low();
-    //     for word in buf {
-    //         *word = nb::block!(self.spi.read_nonblocking())?;
-    //     }
+    //     self.spi.write(buf).map_err(SpiError::from)?;
     //     self.cs.set_high();
     //     Ok(())
     // }
 
-    // fn write(&mut self, buf: &[u8]) -> Result<(), SpiError> {
+    // fn read_bytes(&mut self, buf: &mut [u8]) -> Result<(), SpiError> {
     //     self.cs.set_low();
-    //     for word in buf {
-    //         nb::block!(self.spi.write_nonblocking(word))?;
+    //     for byte in buf.iter_mut() {
+    //         *byte = 0x00;  // Send dummy data
     //     }
+    //     self.spi.transfer(buf).map_err(SpiError::from)?;
     //     self.cs.set_high();
     //     Ok(())
     // }
 
-    fn transfer(&mut self, read: &mut [u8], write: &[u8]) -> Result<(), SpiError> {
-        self.cs.set_low();
-        // self.spi.transfer(read, write)?;
-        self.cs.set_high();
-        Ok(())
-    }
+    // fn transfer_bytes<'a>(&mut self, buf: &'a mut [u8]) -> Result<&'a [u8], SpiError> {
+    //     self.cs.set_low();
+    //     let result = self.spi.transfer(buf).map_err(SpiError::from)?;
+    //     self.cs.set_high();
+    //     Ok(result)
+    // }
 
-    fn transfer_in_place(&mut self, buf: &mut [u8]) -> Result<(), SpiError> {
-        self.cs.set_low();
-        // self.spi.transfer_in_place(buf)?;
-        self.cs.set_high();
-        Ok(())
-    }
+
+    
 }
 
 // TODO: Make this module generic
