@@ -1,12 +1,12 @@
 use embedded_hal_1::spi::{Error, ErrorKind, ErrorType, Operation, SpiDevice};
-use embedded_hal::blocking::spi::{Write, Transfer};
+use embedded_hal::blocking::spi::{Write};
 use stm32f1xx_hal::{
     // TODO: Make this module generic
     afio::Parts as AfioParts,
-    gpio::{Alternate, GpioExt, Output, Pin, PushPull, HL},
-    pac::{dbgmcu::cr, AFIO, SPI1},
+    gpio::{Alternate,  Output, Pin, PushPull, HL},
+    pac::{SPI1},
     rcc::Clocks,
-    spi::{Error as Stm32F1SpiError, Instance, Mode, Phase, Polarity, Spi, Spi1NoRemap},
+    spi::{Error as Stm32F1SpiError,  Mode, Phase, Polarity, Spi, Spi1NoRemap},
 };
 
 use sys_time::prelude::*;
@@ -137,15 +137,19 @@ impl SpiDevice for SpiMaster {
         for op in operations {
             match op {
                 Operation::Read(buf) => {
+                    let _ = buf;
                     // self.spi.read(buf).map_err(SpiError::from)?;
                 }
                 Operation::Write(buf) => {
                     self.spi.write(buf).map_err(SpiError::from)?;
                 }
                 Operation::Transfer(read, write) => {
+                    let _ = read;
+                    let _ = write;
                     // self.spi.transfer(read, write).map_err(SpiError::from)?;
                 }
                 Operation::TransferInPlace(buf) => {
+                    let _ = buf;
                     // self.spi.transfer_in_place(buf).map_err(SpiError::from)?;
                 }
                 Operation::DelayNs(ns) => {
@@ -190,5 +194,4 @@ impl SpiDevice for SpiMaster {
 
 // TODO: Make this module generic
 // pub type SpiMaster2 = SpiMaster<SPI2, 'A', 4, 'A', 13, 5, 'A', 14, 5, 'A', 15, 5>;
-// pub type SpiMaster1 = SpiMaster<SPI1>;
-// pub type SpiMaster1 = SpiMaster<SPI1>;
+pub type SpiMaster1 = SpiMaster;

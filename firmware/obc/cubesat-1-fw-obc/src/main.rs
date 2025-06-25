@@ -51,8 +51,8 @@ mod nucleo_fxxxxx_board {
     };
     #[cfg(feature = "stm32vldiscovery-board")]
     use board::{
-        led::{LedGreen,LedBlue},
-        spi::SpiMaster as SpiCc1101,
+        led::{LedBlue},
+        spi::SpiMaster1 as SpiCc1101,
     };
 
     #[app(device = pac, dispatchers = [TIM2, TIM3])]
@@ -118,28 +118,28 @@ mod nucleo_fxxxxx_board {
             let rcc = dp.RCC.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]
             let mut rcc = dp.RCC.constrain();
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let rcc = dp.RCC.constrain();
+            let mut flash = dp.FLASH.constrain();
+            let mut afio = dp.AFIO.constrain();
+            #[cfg(feature = "nucleo-f446re-board")]
+            let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze();
+            #[cfg(feature = "nucleo-f767zi-board")]
             let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze();
             #[cfg(feature = "stm32vldiscovery-board")]
-            let mut rcc = dp.RCC.constrain();
-            let clocks = rcc.cfgr
-                .use_hse(8.mhz())    
-                .sysclk(SYS_CLK)      
-                .pclk1(SYS_CLK)
-                .freeze();
+            let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze(&mut flash.acr);
             #[cfg(feature = "nucleo-f446re-board")]
             let mut syscfg = dp.SYSCFG.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]
             let mut syscfg = dp.SYSCFG;
             let mut exti = dp.EXTI;
-            #[cfg(feature = "stm32vldiscovery-board")]
-            let mut syscfg = (); 
             // Initialize GPIO Ports
             #[cfg(feature = "nucleo-f446re-board")]
             let gpioa = dp.GPIOA.split();
             #[cfg(feature = "stm32vldiscovery-board")]
-            let gpioa = dp.GPIOA.split();
-            let gpiob = dp.GPIOB.split();
-            let gpioc = dp.GPIOC.split();
+            let mut gpioa = dp.GPIOA.split();
+            let  gpiob = dp.GPIOB.split();
+            let mut gpioc = dp.GPIOC.split();
             #[cfg(feature = "nucleo-f767zi-board")]
             let gpiod = dp.GPIOD.split();
             
@@ -152,21 +152,28 @@ mod nucleo_fxxxxx_board {
             let pin_led_green = gpioa.pa5;
             #[cfg(feature = "nucleo-f767zi-board")]
             let pin_led_green = gpiob.pb0;
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let pin_led_green = gpioc.pc9;
+            #[cfg(feature = "nucleo-f446re-board")]
+            #[cfg(feature = "nucleo-f767zi-board")]
             let led_green = LedGreen::new(LedParameters { pin: pin_led_green });
             #[cfg(feature = "stm32vldiscovery-board")]
-            let led_green = gpioc.pc9; 
+            let led_green = LedGreen::new(LedParameters { pin: pin_led_green,cr: &mut gpioc.crh,});
             #[cfg(feature = "nucleo-f446re-board")]
             #[allow(clippy::let_unit_value)]
             let led_blue = LedBlue::default();
             #[cfg(feature = "nucleo-f767zi-board")]
             let led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let led_blue = LedBlue::new(LedParameters {pin: gpioc.pc8,cr: &mut gpioc.crh,});
             #[cfg(feature = "nucleo-f446re-board")]
+            #[allow(clippy::let_unit_value)]
+            let led_red = LedRed::default();
+            #[cfg(feature = "stm32vldiscovery-board")]
             #[allow(clippy::let_unit_value)]
             let led_red = LedRed::default();
             #[cfg(feature = "nucleo-f767zi-board")]
             let led_red = LedRed::new(LedParameters { pin: gpiob.pb14 });
-            #[cfg(feature = "stm32vldiscovery-board")]
-            let led_blue = gpioc.pc8;
             // Initialize UART for serial communication through USB
             #[cfg(feature = "nucleo-f446re-board")]
             let serial_param = SerialParameters {
@@ -188,6 +195,8 @@ mod nucleo_fxxxxx_board {
                 clocks: &clocks,
                 pin_tx: gpioa.pa9,
                 pin_rx: gpioa.pa10,
+                afio: &mut afio,
+                cr: &mut gpioa.crh,
             };
             let mut serial = SerialUartUsb::new(serial_param);
             serial.println("Hello RTIC!");
@@ -244,8 +253,7 @@ mod nucleo_fxxxxx_board {
             let event_pin_gdo_2 = EventPinParameters{
                 pin: gpiob.pb5,
                 edge: Edge::Falling,
-                syscfg: &mut syscfg,
-                pull: Pull::Up,
+                afio: &mut afio,
                 exti: &mut exti,
             };
             let cc1101_int = EventPinCc1101Gdo2::new(event_pin_gdo_2);
@@ -276,11 +284,15 @@ mod nucleo_fxxxxx_board {
             let spi_param = SpiParameters {
                 spi: dp.SPI1,
                 clocks: &clocks,
+                afio: &mut afio,
                 freq: FreqSize::kHz(250),
                 pin_cs: gpioa.pa4,
                 pin_sck: gpioa.pa5,
                 pin_miso: gpioa.pa6,
                 pin_mosi: gpioa.pa7,
+                cr_cs: &mut gpioa.crl,
+                cr_sck: &mut gpioa.crl,
+                cr_mosi: &mut gpioa.crl,
             };
             let spi_cc1101 = SpiCc1101::new(spi_param);
 

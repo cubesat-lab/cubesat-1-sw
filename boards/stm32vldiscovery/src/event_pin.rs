@@ -1,7 +1,6 @@
 use stm32f1xx_hal::{
     gpio::{Edge, ExtiPin, Floating, Input, Pin},
-    pac::{AFIO, EXTI},
-    rcc::APB2,
+    pac::{EXTI},
 };
 
 pub struct EventPinParameters<'a, const P: char, const N: u8> {
@@ -9,7 +8,6 @@ pub struct EventPinParameters<'a, const P: char, const N: u8> {
     pub edge: Edge,
     pub afio: &'a mut stm32f1xx_hal::afio::Parts,
     pub exti: &'a mut EXTI,
-    pub apb: &'a mut APB2,
 }
 
 pub struct EventPin<const P: char, const N: u8> {
@@ -37,4 +35,4 @@ impl<const P: char, const N: u8> EventPin<P, N> {
     }
 }
 
-pub type EventPinCc1101Gdo2 = EventPin<'D', 2>;
+pub type EventPinCc1101Gdo2 = EventPin<'B', 5>;
