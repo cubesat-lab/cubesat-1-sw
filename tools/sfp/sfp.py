@@ -5,21 +5,22 @@ import crcmod.predefined # type: ignore
 import threading
 import time
 import sys
+import queue
+
 
 """
-How to use sfp module:
+How to use sfp module (Single Thread - Send/Receive every 100ms):
     1. create a pair of virtual serial ports -> socat -d -d pty,raw,echo=0 pty,raw,echo=0   
-    2. terminal 1 - receiver -> python3 sfp.py -p /dev/ttys014 -b 115200 
-    3. terminal 2 - sender -> python3 sfp.py -p /dev/ttys012 -b 115200 -i 
+    2. terminal 1 - transceiver -> python3 sfp.py -p /dev/ttys022 -b 115200 
+    3. terminal 2 - transceiver -> python3 sfp.py -p /dev/ttys023 -b 115200 -i 
 message: (normal text) hello or /sfp hello (sent as a sfp frame)
 
 Usage examples:
-    python3 sfp.py -p /dev/ttys012 -b 115200 -> sfp enabled
-    python3 sfp.py -p /dev/ttys012 -b 115200 --no-sfp -> sfp disabled
-    python3 sfp.py -p /dev/ttys012 -b 115200 -i -> input mode enabled
+    python3 sfp.py -p /dev/ttys012 -b 115200 -> sfp enabled, receive-only mode
+    python3 sfp.py -p /dev/ttys012 -b 115200 --no-sfp -> sfp disabled, receive-only mode
+    python3 sfp.py -p /dev/ttys012 -b 115200 -i -> input mode enabled, full transceiver
     python3 sfp.py -p /dev/ttys012 -b 115200 --no-sfp -i -> input mode enabled, SFP disabled
 """
-
 
 NL = "\n"
 TAB = " " * 4
@@ -128,6 +129,7 @@ class SerialLinkSFP:
         self.enable_sfp = enable_sfp
         self.input_mode = input_mode
         self.running = False
+        self.send_queue = queue.Queue()
         self.sfp_state_machine = {
             'state': 'WAIT_MARKER_1',
             'data_buffer': bytearray(),
@@ -141,7 +143,7 @@ class SerialLinkSFP:
             self.serial_obj = serial.Serial()
             self.serial_obj.port = port
             self.serial_obj.baudrate = baudrate
-            self.serial_obj.timeout = 0.1
+            self.serial_obj.timeout = 0.01 
             self.serial_obj.open()
             
             self.sfp = SFP(self.serial_obj)
@@ -150,15 +152,16 @@ class SerialLinkSFP:
             print(f"{TAB}Port:     {self.serial_obj.port}")
             print(f"{TAB}Baudrate: {self.serial_obj.baudrate}")
             print(f"{TAB}SFP Mode: {'Enabled' if self.enable_sfp else 'Disabled'}")
+            print(f"{TAB}Mode: Single thread - Send/Receive every 100ms")
             if self.input_mode:
                 print(f"{TAB}Input Mode: Enabled - You can type messages to send")
             print(f"{SEP}")
             
             self.running = True
             
-            self.receiver_thread = threading.Thread(target=self.receive_loop)
-            self.receiver_thread.daemon = True
-            self.receiver_thread.start()
+            self.comm_thread = threading.Thread(target=self.communication_loop)
+            self.comm_thread.daemon = True
+            self.comm_thread.start()
             
             if self.input_mode:
                 self.input_thread = threading.Thread(target=self.input_loop)
@@ -179,13 +182,49 @@ class SerialLinkSFP:
                 self.serial_obj.close()
                 print("Serial port closed")
     
-    def receive_loop(self):
+    def communication_loop(self):
         try:
+            last_time = time.time()
+            
             while self.running and self.serial_obj.is_open:
+                current_time = time.time()
+                
+                if current_time - last_time >= 0.1:  
+                    self.send_phase()
+                    self.receive_phase()
+                    last_time = current_time
+                else:
+                    time.sleep(0.001)
+        
+        except Exception as e:
+            print(f"\nCommunication thread error: {e}")
+            self.running = False
+    
+    def send_phase(self):
+        try:
+            message_data = self.send_queue.get_nowait()
+            
+            if message_data['type'] == 'sfp':
+                bytes_sent = self.sfp.send_frame(message_data['data'])
+                print(f"\n[Sent SFP frame: {bytes_sent} bytes]")
+            elif message_data['type'] == 'raw':
+                self.serial_obj.write(message_data['data'])
+                
+        except queue.Empty:
+            pass
+        except Exception as e:
+            print(f"\n[Error in send phase: {e}]")
+    
+    def receive_phase(self):
+        try:
+            start_time = time.time()
+            max_receive_time = 0.05  
+            
+            while (time.time() - start_time) < max_receive_time:
                 byte_data = self.serial_obj.read(1)
                 
-                if not byte_data: 
-                    continue
+                if not byte_data:
+                    break
                     
                 if self.enable_sfp:
                     new_state, frame_complete, frame_data = self.sfp.process_incoming_byte(
@@ -195,6 +234,7 @@ class SerialLinkSFP:
                     
                     if frame_complete and frame_data:
                         self.handle_sfp_frame(frame_data)
+                        
                 try:
                     char = byte_data.decode('ascii')
                     if char.isprintable() or char in '\n\r\t':
@@ -205,10 +245,9 @@ class SerialLinkSFP:
                         hex_value = byte_data.hex().upper()
                         sys.stdout.write(f"[{hex_value}]")
                         sys.stdout.flush()
-        
+                        
         except Exception as e:
-            print(f"\nReceiver thread error: {e}")
-            self.running = False
+            print(f"\n[Error in receive phase: {e}]")
     
     def input_loop(self):
         try:
@@ -220,18 +259,19 @@ class SerialLinkSFP:
                 
                 if user_input.startswith("/sfp "):
                     data = user_input[5:].encode('utf-8')
-                    try:
-                        bytes_sent = self.sfp.send_frame(data)
-                        print(f"\n[Sent SFP frame: {bytes_sent} bytes]")
-                    except Exception as e:
-                        print(f"\n[Error sending SFP frame: {e}]")
+                    self.send_queue.put({
+                        'type': 'sfp',
+                        'data': data
+                    })
                 elif user_input == "/quit":
                     self.running = False
                     break
                 else:
-                    # Send as raw data
                     data = (user_input + '\n').encode('utf-8')
-                    self.serial_obj.write(data)
+                    self.send_queue.put({
+                        'type': 'raw',
+                        'data': data
+                    })
         
         except Exception as e:
             print(f"\nInput thread error: {e}")
@@ -252,7 +292,7 @@ class SerialLinkSFP:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Serial Link with SFP Protocol Support')
+    parser = argparse.ArgumentParser(description='Serial Link with SFP Protocol Support - Single Thread')
     parser.add_argument('-p', '--port', type=str, required=True, help='Serial COM Port')
     parser.add_argument('-b', '--baudrate', type=int, default=115200, help='Baudrate')
     parser.add_argument('--no-sfp', action='store_true', help='Disable SFP protocol processing')
@@ -264,6 +304,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
