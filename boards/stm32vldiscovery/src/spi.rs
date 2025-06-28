@@ -1,12 +1,11 @@
+use embedded_hal::blocking::spi::Write;
 use embedded_hal_1::spi::{Error, ErrorKind, ErrorType, Operation, SpiDevice};
-use embedded_hal::blocking::spi::{Write};
 use stm32f1xx_hal::{
-    // TODO: Make this module generic
     afio::Parts as AfioParts,
-    gpio::{Alternate,  Output, Pin, PushPull, HL},
-    pac::{SPI1},
+    gpio::{Alternate, Cr, Output, Pin, PushPull},
+    pac::SPI1,
     rcc::Clocks,
-    spi::{Error as Stm32F1SpiError,  Mode, Phase, Polarity, Spi, Spi1NoRemap},
+    spi::{Error as Stm32F1SpiError, Mode, Phase, Polarity, Spi, Spi1NoRemap},
 };
 
 use sys_time::prelude::*;
@@ -52,17 +51,13 @@ pub struct SpiParameters<'a> {
     pub pin_sck: Pin<'A', 5>,
     pub pin_miso: Pin<'A', 6>,
     pub pin_mosi: Pin<'A', 7>,
-    pub cr_sck: &'a mut <Pin<'A', 5> as HL>::Cr,
-    pub cr_cs: &'a mut <Pin<'A', 4> as HL>::Cr,
-    pub cr_mosi: &'a mut <Pin<'A', 7> as HL>::Cr,
+    pub cr: &'a mut Cr<'A', false>,
 }
 
 pub type Spi1Type =
     Spi<SPI1, Spi1NoRemap, (Pin<'A', 5, Alternate>, Pin<'A', 6>, Pin<'A', 7, Alternate>), u8>;
 
 pub type CS = Pin<'A', 4, Output>;
-
-
 
 pub struct SpiMaster {
     pub spi: Spi1Type,
@@ -90,7 +85,7 @@ impl SpiMaster {
         // cs.set_high();
         let cs = spi_parameters
             .pin_cs
-            .into_push_pull_output(spi_parameters.cr_cs);
+            .into_push_pull_output(spi_parameters.cr);
 
         // Initialize SPI
         // let spi = Spi::new(
@@ -116,11 +111,11 @@ impl SpiMaster {
             (
                 spi_parameters
                     .pin_sck
-                    .into_alternate_push_pull(spi_parameters.cr_sck),
+                    .into_alternate_push_pull(spi_parameters.cr),
                 spi_parameters.pin_miso,
                 spi_parameters
                     .pin_mosi
-                    .into_alternate_push_pull(spi_parameters.cr_mosi),
+                    .into_alternate_push_pull(spi_parameters.cr),
             ),
             &mut spi_parameters.afio.mapr,
             mode,
@@ -187,9 +182,6 @@ impl SpiDevice for SpiMaster {
     //     self.cs.set_high();
     //     Ok(result)
     // }
-
-
-    
 }
 
 // TODO: Make this module generic

@@ -1,6 +1,5 @@
-pub use stm32f4xx_hal::gpio::Edge;
 use stm32f4xx_hal::{
-    gpio::{ExtiPin, Input, Pin, Pull},
+    gpio::{Edge, ExtiPin, Input, Pin, Pull},
     pac::EXTI,
     syscfg::SysCfg,
 };

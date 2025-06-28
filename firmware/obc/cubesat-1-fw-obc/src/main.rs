@@ -5,18 +5,22 @@ use panic_halt as _;
 use rtic::app;
 use sys_time::prelude::*;
 
-#[cfg(any(feature = "nucleo-f446re-board", feature = "nucleo-f767zi-board", feature = "stm32vldiscovery-board"))]
+#[cfg(any(
+    feature = "nucleo-f446re-board",
+    feature = "nucleo-f767zi-board",
+    feature = "stm32vldiscovery-board"
+))]
 mod nucleo_fxxxxx_board {
     use super::*;
     use cc1101_wrapper::{Cc1101Wrapper, PACKET_LENGTH};
     use rtic::Mutex;
 
+    #[cfg(feature = "stm32vldiscovery-board")]
+    use stm32f1xx_hal as hal;
     #[cfg(feature = "nucleo-f446re-board")]
     use stm32f4xx_hal as hal;
     #[cfg(feature = "nucleo-f767zi-board")]
     use stm32f7xx_hal as hal;
-    #[cfg(feature = "stm32vldiscovery-board")]
-    use stm32f1xx_hal as hal;
 
     use hal::{
         gpio::Edge,
@@ -44,15 +48,12 @@ mod nucleo_fxxxxx_board {
 
     #[cfg(feature = "nucleo-f446re-board")]
     use board::spi::SpiMaster2 as SpiCc1101;
+    #[cfg(feature = "stm32vldiscovery-board")]
+    use board::{led::LedBlue, spi::SpiMaster1 as SpiCc1101};
     #[cfg(feature = "nucleo-f767zi-board")]
     use board::{
         led::{LedBlue, LedRed},
         spi::SpiMaster3 as SpiCc1101,
-    };
-    #[cfg(feature = "stm32vldiscovery-board")]
-    use board::{
-        led::{LedBlue},
-        spi::SpiMaster1 as SpiCc1101,
     };
 
     #[app(device = pac, dispatchers = [TIM2, TIM3])]
@@ -120,7 +121,9 @@ mod nucleo_fxxxxx_board {
             let mut rcc = dp.RCC.constrain();
             #[cfg(feature = "stm32vldiscovery-board")]
             let rcc = dp.RCC.constrain();
+            #[cfg(feature = "stm32vldiscovery-board")]
             let mut flash = dp.FLASH.constrain();
+            #[cfg(feature = "stm32vldiscovery-board")]
             let mut afio = dp.AFIO.constrain();
             #[cfg(feature = "nucleo-f446re-board")]
             let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze();
@@ -133,16 +136,22 @@ mod nucleo_fxxxxx_board {
             #[cfg(feature = "nucleo-f767zi-board")]
             let mut syscfg = dp.SYSCFG;
             let mut exti = dp.EXTI;
+
             // Initialize GPIO Ports
             #[cfg(feature = "nucleo-f446re-board")]
             let gpioa = dp.GPIOA.split();
             #[cfg(feature = "stm32vldiscovery-board")]
             let mut gpioa = dp.GPIOA.split();
-            let  gpiob = dp.GPIOB.split();
+            let gpiob = dp.GPIOB.split();
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let gpioc = dp.GPIOC.split();
+            #[cfg(feature = "nucleo-f446re-board")]
+            let gpioc = dp.GPIOC.split();
+            #[cfg(feature = "stm32vldiscovery-board")]
             let mut gpioc = dp.GPIOC.split();
             #[cfg(feature = "nucleo-f767zi-board")]
             let gpiod = dp.GPIOD.split();
-            
+
             // Initialize SysTime
             let sysclk = SYS_CLK.to_Hz();
             SysTime::start(cp.SYST, sysclk);
@@ -155,17 +164,24 @@ mod nucleo_fxxxxx_board {
             #[cfg(feature = "stm32vldiscovery-board")]
             let pin_led_green = gpioc.pc9;
             #[cfg(feature = "nucleo-f446re-board")]
+            let led_green = LedGreen::new(LedParameters { pin: pin_led_green });
             #[cfg(feature = "nucleo-f767zi-board")]
             let led_green = LedGreen::new(LedParameters { pin: pin_led_green });
             #[cfg(feature = "stm32vldiscovery-board")]
-            let led_green = LedGreen::new(LedParameters { pin: pin_led_green,cr: &mut gpioc.crh,});
+            let led_green = LedGreen::new(LedParameters {
+                pin: pin_led_green,
+                cr: &mut gpioc.crh,
+            });
             #[cfg(feature = "nucleo-f446re-board")]
             #[allow(clippy::let_unit_value)]
             let led_blue = LedBlue::default();
             #[cfg(feature = "nucleo-f767zi-board")]
             let led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
             #[cfg(feature = "stm32vldiscovery-board")]
-            let led_blue = LedBlue::new(LedParameters {pin: gpioc.pc8,cr: &mut gpioc.crh,});
+            let led_blue = LedBlue::new(LedParameters {
+                pin: gpioc.pc8,
+                cr: &mut gpioc.crh,
+            });
             #[cfg(feature = "nucleo-f446re-board")]
             #[allow(clippy::let_unit_value)]
             let led_red = LedRed::default();
@@ -200,7 +216,7 @@ mod nucleo_fxxxxx_board {
             };
             let mut serial = SerialUartUsb::new(serial_param);
             serial.println("Hello RTIC!");
-            
+
             // Initialize User Button
             #[cfg(feature = "nucleo-f446re-board")]
             let button_param = ButtonParameters {
@@ -219,15 +235,15 @@ mod nucleo_fxxxxx_board {
                 apb: &mut rcc.apb2,
                 debounce_period: TimeSize::millis(150),
             };
-            
+
             #[cfg(feature = "stm32vldiscovery-board")]
-            let button_param = ButtonParameters{
+            let button_param = ButtonParameters {
                 pin: gpioa.pa0,
                 edge: Edge::Falling,
                 exti: &mut exti,
                 afio: &mut afio,
                 cr: &mut gpioa.crl,
-                debounce_period:TimeSize::millis(150),
+                debounce_period: TimeSize::millis(150),
             };
 
             let button = Button::new(button_param);
@@ -250,7 +266,7 @@ mod nucleo_fxxxxx_board {
                 apb: &mut rcc.apb2,
             };
             #[cfg(feature = "stm32vldiscovery-board")]
-            let event_pin_gdo_2 = EventPinParameters{
+            let event_pin_gdo_2 = EventPinParameters {
                 pin: gpiob.pb5,
                 edge: Edge::Falling,
                 afio: &mut afio,
@@ -290,9 +306,7 @@ mod nucleo_fxxxxx_board {
                 pin_sck: gpioa.pa5,
                 pin_miso: gpioa.pa6,
                 pin_mosi: gpioa.pa7,
-                cr_cs: &mut gpioa.crl,
-                cr_sck: &mut gpioa.crl,
-                cr_mosi: &mut gpioa.crl,
+                cr: &mut gpioa.crl,
             };
             let spi_cc1101 = SpiCc1101::new(spi_param);
 
@@ -476,7 +490,7 @@ mod nucleo_fxxxxx_board {
                             let _ = led_red;
                             #[cfg(feature = "nucleo-f767zi-board")]
                             led_red.toggle();
-                             #[cfg(feature = "stm32vldiscovery-board")]
+                            #[cfg(feature = "stm32vldiscovery-board")]
                             let _ = led_red;
                         });
 

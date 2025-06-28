@@ -1,6 +1,6 @@
 use stm32f1xx_hal::{
     gpio::{Edge, ExtiPin, Floating, Input, Pin},
-    pac::{EXTI},
+    pac::EXTI,
 };
 
 pub struct EventPinParameters<'a, const P: char, const N: u8> {
@@ -16,8 +16,8 @@ pub struct EventPin<const P: char, const N: u8> {
 
 impl<const P: char, const N: u8> EventPin<P, N> {
     pub fn new(event_pin_parameters: EventPinParameters<P, N>) -> Self {
-        // let mut pin = event_pin_parameters.pin.into_floating_input();
         let mut pin = event_pin_parameters.pin;
+
         // Enable external interrupt on the pin
         pin.make_interrupt_source(event_pin_parameters.afio);
         pin.trigger_on_edge(event_pin_parameters.exti, event_pin_parameters.edge);
