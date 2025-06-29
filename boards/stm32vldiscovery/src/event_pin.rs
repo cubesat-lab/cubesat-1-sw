@@ -1,4 +1,5 @@
 use stm32f1xx_hal::{
+    afio::Parts,
     gpio::{Edge, ExtiPin, Floating, Input, Pin},
     pac::EXTI,
 };
@@ -6,7 +7,7 @@ use stm32f1xx_hal::{
 pub struct EventPinParameters<'a, const P: char, const N: u8> {
     pub pin: Pin<P, N, Input<Floating>>,
     pub edge: Edge,
-    pub afio: &'a mut stm32f1xx_hal::afio::Parts,
+    pub afio: &'a mut Parts,
     pub exti: &'a mut EXTI,
 }
 
