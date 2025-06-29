@@ -5,12 +5,19 @@ use panic_halt as _;
 use rtic::app;
 use sys_time::prelude::*;
 
-#[cfg(any(feature = "nucleo-f446re-board", feature = "nucleo-f767zi-board"))]
-mod nucleo_fxxxxx_board {
+#[cfg(any(
+    feature = "nucleo-f446re-board",
+    feature = "nucleo-f767zi-board",
+    feature = "stm32vldiscovery-board"
+))]
+mod stm32_dev_board {
     use super::*;
     use cc1101_wrapper::{Cc1101Wrapper, PACKET_LENGTH};
     use rtic::Mutex;
 
+    // Import HAL based on the selected board
+    #[cfg(feature = "stm32vldiscovery-board")]
+    use stm32f1xx_hal as hal;
     #[cfg(feature = "nucleo-f446re-board")]
     use stm32f4xx_hal as hal;
     #[cfg(feature = "nucleo-f767zi-board")]
@@ -27,10 +34,13 @@ mod nucleo_fxxxxx_board {
     #[cfg(feature = "nucleo-f767zi-board")]
     use hal::rcc::PLL48CLK;
 
+    // Import Board crate based on the selected board
     #[cfg(feature = "nucleo-f446re-board")]
     use nucleo_f446re as board;
     #[cfg(feature = "nucleo-f767zi-board")]
     use nucleo_f767zi as board;
+    #[cfg(feature = "stm32vldiscovery-board")]
+    use stm32vldiscovery as board;
 
     use board::{
         button::{Button, ButtonParameters},
@@ -42,6 +52,8 @@ mod nucleo_fxxxxx_board {
 
     #[cfg(feature = "nucleo-f446re-board")]
     use board::spi::SpiMaster2 as SpiCc1101;
+    #[cfg(feature = "stm32vldiscovery-board")]
+    use board::{led::LedBlue, spi::SpiMaster1 as SpiCc1101};
     #[cfg(feature = "nucleo-f767zi-board")]
     use board::{
         led::{LedBlue, LedRed},
@@ -72,15 +84,17 @@ mod nucleo_fxxxxx_board {
 
         #[cfg(feature = "nucleo-f446re-board")]
         type LedBlue = ();
-        #[cfg(feature = "nucleo-f446re-board")]
+        #[cfg(any(feature = "nucleo-f446re-board", feature = "stm32vldiscovery-board"))]
         type LedRed = ();
-        #[cfg(feature = "nucleo-f446re-board")]
+        #[cfg(any(feature = "nucleo-f446re-board", feature = "stm32vldiscovery-board"))]
         type Usb<'a> = ();
 
         #[cfg(feature = "nucleo-f446re-board")]
         const SYS_CLK: FreqSize = FreqSize::MHz(180);
         #[cfg(feature = "nucleo-f767zi-board")]
         const SYS_CLK: FreqSize = FreqSize::MHz(216);
+        #[cfg(feature = "stm32vldiscovery-board")]
+        const SYS_CLK: FreqSize = FreqSize::MHz(24);
 
         #[shared]
         struct Shared {
@@ -107,10 +121,14 @@ mod nucleo_fxxxxx_board {
             let dp = ctx.device;
 
             // Set up the system clock
-            #[cfg(feature = "nucleo-f446re-board")]
+            #[cfg(any(feature = "nucleo-f446re-board", feature = "stm32vldiscovery-board"))]
             let rcc = dp.RCC.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]
             let mut rcc = dp.RCC.constrain();
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let mut flash = dp.FLASH.constrain();
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let mut afio = dp.AFIO.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]
             let clocks = rcc
                 .cfgr
@@ -120,6 +138,8 @@ mod nucleo_fxxxxx_board {
                 .freeze();
             #[cfg(feature = "nucleo-f446re-board")]
             let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze();
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let clocks = rcc.cfgr.sysclk(SYS_CLK).freeze(&mut flash.acr);
             #[cfg(feature = "nucleo-f446re-board")]
             let mut syscfg = dp.SYSCFG.constrain();
             #[cfg(feature = "nucleo-f767zi-board")]
@@ -127,9 +147,15 @@ mod nucleo_fxxxxx_board {
             let mut exti = dp.EXTI;
 
             // Initialize GPIO Ports
+            #[cfg(any(feature = "nucleo-f446re-board", feature = "nucleo-f767zi-board"))]
             let gpioa = dp.GPIOA.split();
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let mut gpioa = dp.GPIOA.split();
             let gpiob = dp.GPIOB.split();
+            #[cfg(any(feature = "nucleo-f446re-board", feature = "nucleo-f767zi-board"))]
             let gpioc = dp.GPIOC.split();
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let mut gpioc = dp.GPIOC.split();
             #[cfg(feature = "nucleo-f767zi-board")]
             let gpiod = dp.GPIOD.split();
 
@@ -142,13 +168,28 @@ mod nucleo_fxxxxx_board {
             let pin_led_green = gpioa.pa5;
             #[cfg(feature = "nucleo-f767zi-board")]
             let pin_led_green = gpiob.pb0;
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let pin_led_green = gpioc.pc9;
+            #[cfg(feature = "nucleo-f446re-board")]
             let led_green = LedGreen::new(LedParameters { pin: pin_led_green });
+            #[cfg(feature = "nucleo-f767zi-board")]
+            let led_green = LedGreen::new(LedParameters { pin: pin_led_green });
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let led_green = LedGreen::new(LedParameters {
+                pin: pin_led_green,
+                cr: &mut gpioc.crh,
+            });
             #[cfg(feature = "nucleo-f446re-board")]
             #[allow(clippy::let_unit_value)]
             let led_blue = LedBlue::default();
             #[cfg(feature = "nucleo-f767zi-board")]
             let led_blue = LedBlue::new(LedParameters { pin: gpiob.pb7 });
-            #[cfg(feature = "nucleo-f446re-board")]
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let led_blue = LedBlue::new(LedParameters {
+                pin: gpioc.pc8,
+                cr: &mut gpioc.crh,
+            });
+            #[cfg(any(feature = "nucleo-f446re-board", feature = "stm32vldiscovery-board"))]
             #[allow(clippy::let_unit_value)]
             let led_red = LedRed::default();
             #[cfg(feature = "nucleo-f767zi-board")]
@@ -169,6 +210,15 @@ mod nucleo_fxxxxx_board {
                 pin_tx: gpiod.pd8,
                 pin_rx: gpiod.pd9,
             };
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let serial_param = SerialParameters {
+                uart: dp.USART1,
+                clocks: &clocks,
+                pin_tx: gpioa.pa9,
+                pin_rx: gpioa.pa10,
+                afio: &mut afio,
+                cr: &mut gpioa.crh,
+            };
             let mut serial = SerialUartUsb::new(serial_param);
             serial.println("Hello RTIC!");
 
@@ -184,7 +234,7 @@ mod nucleo_fxxxxx_board {
             };
             #[cfg(feature = "nucleo-f767zi-board")]
             let usb = Usb::new(usb_param);
-            #[cfg(feature = "nucleo-f446re-board")]
+            #[cfg(any(feature = "nucleo-f446re-board", feature = "stm32vldiscovery-board"))]
             #[allow(clippy::let_unit_value)]
             let usb = Usb::default();
 
@@ -206,6 +256,15 @@ mod nucleo_fxxxxx_board {
                 apb: &mut rcc.apb2,
                 debounce_period: TimeSize::millis(150),
             };
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let button_param = ButtonParameters {
+                pin: gpioa.pa0,
+                edge: Edge::Falling,
+                exti: &mut exti,
+                afio: &mut afio,
+                cr: &mut gpioa.crl,
+                debounce_period: TimeSize::millis(150),
+            };
             let button = Button::new(button_param);
 
             // Initialize CC1101 interrupt
@@ -224,6 +283,13 @@ mod nucleo_fxxxxx_board {
                 syscfg: &mut syscfg,
                 exti: &mut exti,
                 apb: &mut rcc.apb2,
+            };
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let event_pin_gdo_2 = EventPinParameters {
+                pin: gpiob.pb5,
+                edge: Edge::Falling,
+                afio: &mut afio,
+                exti: &mut exti,
             };
             let cc1101_int = EventPinCc1101Gdo2::new(event_pin_gdo_2);
 
@@ -248,6 +314,18 @@ mod nucleo_fxxxxx_board {
                 pin_sck: gpiob.pb13,
                 pin_miso: gpiob.pb14,
                 pin_mosi: gpiob.pb15,
+            };
+            #[cfg(feature = "stm32vldiscovery-board")]
+            let spi_param = SpiParameters {
+                spi: dp.SPI1,
+                clocks: &clocks,
+                afio: &mut afio,
+                freq: FreqSize::kHz(250),
+                pin_cs: gpioa.pa4,
+                pin_sck: gpioa.pa5,
+                pin_miso: gpioa.pa6,
+                pin_mosi: gpioa.pa7,
+                cr: &mut gpioa.crl,
             };
             let spi_cc1101 = SpiCc1101::new(spi_param);
 
@@ -447,16 +525,22 @@ mod nucleo_fxxxxx_board {
                             led_green.toggle();
                         });
                         int_params.led_blue.lock(|led_blue| {
+                            #[cfg(any(
+                                feature = "nucleo-f767zi-board",
+                                feature = "stm32vldiscovery-board"
+                            ))]
+                            led_blue.toggle();
                             #[cfg(feature = "nucleo-f446re-board")]
                             let _ = led_blue;
-                            #[cfg(feature = "nucleo-f767zi-board")]
-                            led_blue.toggle();
                         });
                         int_params.led_red.lock(|led_red| {
-                            #[cfg(feature = "nucleo-f446re-board")]
-                            let _ = led_red;
                             #[cfg(feature = "nucleo-f767zi-board")]
                             led_red.toggle();
+                            #[cfg(any(
+                                feature = "nucleo-f446re-board",
+                                feature = "stm32vldiscovery-board"
+                            ))]
+                            let _ = led_red;
                         });
 
                         // Lock shared "serial" resource. Use it in the critical section
@@ -602,168 +686,6 @@ mod nucleo_fxxxxx_board {
                 led_red: ctx.shared.led_red,
                 serial: ctx.shared.serial,
             });
-        }
-    }
-}
-
-#[cfg(feature = "stm32vldiscovery-board")]
-mod stm32vldiscovery_board {
-    use super::*;
-    use stm32f1xx_hal::{gpio::Edge, pac, prelude::*};
-    use stm32vldiscovery::{
-        button::{Button, ButtonParameters},
-        led::{LedBlue, LedGreen, LedParameters},
-        serial::{SerialParameters, SerialUartUsb},
-    };
-
-    #[app(device = pac, dispatchers = [TIM2])]
-    mod app {
-        use super::*;
-
-        #[shared]
-        struct Shared {
-            serial: SerialUartUsb,
-        }
-
-        #[local]
-        struct Local {
-            button: Button,
-            led_green: LedGreen,
-            led_blue: LedBlue,
-        }
-
-        #[init]
-        fn init(ctx: init::Context) -> (Shared, Local) {
-            // Take the core and device peripherals
-            let cp = ctx.core;
-            let dp = ctx.device;
-
-            // Set up the system clock. We want to run at 24MHz for this one.
-            let rcc = dp.RCC.constrain();
-            let mut flash = dp.FLASH.constrain();
-            let clocks = rcc.cfgr.freeze(&mut flash.acr);
-            let mut afio = dp.AFIO.constrain();
-
-            // Initialize GPIO Ports
-            let mut gpioa = dp.GPIOA.split();
-            let mut gpioc = dp.GPIOC.split();
-
-            // Initialize SysTime
-            let sysclk = FreqSize::MHz(24).to_Hz();
-            SysTime::start(cp.SYST, sysclk);
-
-            // Initialize LEDs
-            let led_green = LedGreen::new(LedParameters {
-                pin: gpioc.pc9,
-                cr: &mut gpioc.crh,
-            });
-            let led_blue = LedBlue::new(LedParameters {
-                pin: gpioc.pc8,
-                cr: &mut gpioc.crh,
-            });
-
-            // Initialize UART for serial communication through USB
-            let mut serial = SerialUartUsb::new(SerialParameters {
-                uart: dp.USART1,
-                clocks: &clocks,
-                pin_tx: gpioa.pa9,
-                pin_rx: gpioa.pa10,
-                afio: &mut afio,
-                cr: &mut gpioa.crh,
-            });
-            serial.println("Hello RTIC!");
-
-            // Initialize SPI3
-            // #[cfg(feature = "nucleo-f767zi-board")]
-            // let spi_3 = SpiMaster3::new(
-            //     dp.SPI3,
-            //     &clocks,
-            //     &mut rcc.apb1,
-            //     gpioc.pc9,
-            //     gpioc.pc10,
-            //     gpioc.pc11,
-            //     gpioc.pc12,
-            // );
-
-            // Initialize User Button
-            let mut exti = dp.EXTI;
-            let button = Button::new(ButtonParameters {
-                pin: gpioa.pa0,
-                edge: Edge::Falling,
-                afio: &mut afio,
-                exti: &mut exti,
-                cr: &mut gpioa.crl,
-            });
-
-            // Initialize CC1101 Wrapper - RF Device 1
-            // #[cfg(feature = "nucleo-f767zi-board")]
-            // let mut cc1101_wrp_1 = Cc1101Wrapper::new(spi_3.spi, spi_3.cs);
-            // #[cfg(feature = "nucleo-f767zi-board")]
-            // cc1101_wrp_1.configure_radio().unwrap();
-
-            // Spawn tasks
-            task_10ms::spawn().ok();
-
-            // Return
-            (
-                Shared { serial },
-                Local {
-                    button,
-                    led_green,
-                    led_blue,
-                },
-            )
-        }
-
-        #[task(priority = 1, shared = [serial])]
-        async fn task_10ms(mut ctx: task_10ms::Context) {
-            loop {
-                let mut instant = SysTime::now();
-                instant += TimeSize::millis(10);
-
-                // 10 ms Task
-                {
-                    // Lock shared "serial" resource. Use it in the critical section
-                    ctx.shared.serial.lock(|serial| {
-                        serial.formatln(format_args!(
-                            "[task_10ms] time: {}",
-                            SysTime::now().duration_since_epoch()
-                        ));
-                    });
-                };
-
-                SysTime::delay_until(instant).await;
-            }
-        }
-
-        #[idle(shared = [serial])]
-        fn idle(mut _ctx: idle::Context) -> ! {
-            loop {
-                // Idle Task
-                {
-                    // Do nothing
-                };
-
-                rtic::export::wfi();
-            }
-        }
-
-        #[task(binds = EXTI0, local = [button, led_green, led_blue], shared=[serial])]
-        fn button_isr(mut ctx: button_isr::Context) {
-            // Obtain access to LEDs Peripheral and toggle them
-            ctx.local.led_green.toggle();
-            ctx.local.led_blue.toggle();
-
-            // Lock shared "serial" resource. Use it in the critical section
-            ctx.shared.serial.lock(|serial| {
-                serial.formatln(format_args!(
-                    "[button_isr] time: {}",
-                    SysTime::now().duration_since_epoch()
-                ));
-            });
-
-            // Obtain access to Button Peripheral and Clear Interrupt Pending Flag
-            ctx.local.button.clear_interrupt_pending_bit();
         }
     }
 }
